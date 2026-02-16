@@ -436,9 +436,6 @@ export function activate(context: vscode.ExtensionContext): void {
             md.appendMarkdown(`${details.join(" | ")}\n\n`);
           }
 
-          const rel = vscode.workspace.asRelativePath(vscode.Uri.file(entry.sourcePath));
-          md.appendMarkdown(`**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${entry.sourceLine}\n\n`);
-
           if (entry.params.length > 0) {
             const required = entry.params.filter((param) => isRequiredParam(param.name, param.kind));
             const optional = entry.params.filter((param) => !isRequiredParam(param.name, param.kind));
@@ -466,6 +463,9 @@ export function activate(context: vscode.ExtensionContext): void {
             md.appendMarkdown(`No parameters found in CDF.\n`);
           }
 
+          const rel = vscode.workspace.asRelativePath(vscode.Uri.file(entry.sourcePath));
+          md.appendMarkdown(`\n**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${entry.sourceLine}\n\n`);
+
           md.isTrusted = false;
           return new vscode.Hover(md, wordRange);
         }
@@ -491,9 +491,6 @@ export function activate(context: vscode.ExtensionContext): void {
             md.appendMarkdown(`${details.join(" | ")}\n\n`);
           }
 
-          const rel = vscode.workspace.asRelativePath(vscode.Uri.file(telemetryEntry.sourcePath));
-          md.appendMarkdown(`**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${telemetryEntry.sourceLine}\n\n`);
-
           if (telemetryEntry.params.length > 0) {
             md.appendMarkdown(`**Parameters (${telemetryEntry.params.length})**\n`);
             for (const param of telemetryEntry.params) {
@@ -509,6 +506,9 @@ export function activate(context: vscode.ExtensionContext): void {
           } else {
             md.appendMarkdown(`No parameters found in PLF.\n`);
           }
+
+          const rel = vscode.workspace.asRelativePath(vscode.Uri.file(telemetryEntry.sourcePath));
+          md.appendMarkdown(`\n**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${telemetryEntry.sourceLine}\n\n`);
 
           md.isTrusted = false;
           return new vscode.Hover(md, wordRange);

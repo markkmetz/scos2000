@@ -2,7 +2,7 @@
   "name": "marks-mibs-extension",
   "displayName": "Mark's Mibs Extension",
   "description": "Hover over telecommands to see matching SCOS-2000 MIB entries.",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "publisher": "markkmetz",
   "engines": {
     "vscode": "^1.85.0"
