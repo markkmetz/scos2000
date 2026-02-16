@@ -1,0 +1,69 @@
+{
+  "name": "marks-mibs-extension",
+  "displayName": "Mark's Mibs Extension",
+  "description": "Hover over telecommands to see matching SCOS-2000 MIB entries.",
+  "version": "0.0.1",
+  "publisher": "markkmetz",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onLanguage:plaintext",
+    "onLanguage:tcl",
+    "onCommand:scos2000MibHover.reverseSearch"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "scos2000MibHover.reverseSearch",
+        "title": "SCOS-2000: Reverse MIB Search"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "scos2000MibHover.reverseSearch",
+        "key": "ctrl+alt+m",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "SCOS-2000 MIB Hover",
+      "properties": {
+        "scos2000MibHover.mibGlobs": {
+          "type": "array",
+          "default": [
+            "**/*.mib",
+            "**/*.txt",
+            "**/pcf.dat",
+            "**/pcd.dat",
+            "**/tcd.dat",
+            "**/vpd.dat",
+            "**/*.dat"
+          ],
+          "description": "Glob patterns for MIB files to search."
+        },
+        "scos2000MibHover.maxFiles": {
+          "type": "number",
+          "default": 200,
+          "description": "Maximum number of MIB files to scan on hover."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "mocha -r ts-node/register test/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
+    "@types/mocha": "^10.0.6",
+    "mocha": "^10.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

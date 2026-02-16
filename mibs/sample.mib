@@ -1,0 +1,7 @@
+# Sample SCOS-2000-like MIB snippet for testing
+# This is not a full MIB format, just a simple searchable text file.
+
+TC_FOO_BAR    APID=1001  SERVICE=12  SUBSERVICE=1  DESC="Reset device"
+TC_SET_MODE   APID=1001  SERVICE=12  SUBSERVICE=2  DESC="Set mode"
+TC_PING       APID=1001  SERVICE=17  SUBSERVICE=1  DESC="Ping"
+TM_HK_STATUS  APID=1001  SERVICE=3   SUBSERVICE=25 DESC="Housekeeping"
