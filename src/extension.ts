@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { buildMibIndexFromLines, MibIndex, TcEntry } from "./mibParser";
+import { buildMibIndexFromLines, MibIndex, TcEntry, TelemetryEntry } from "./mibParser";
 import { buildEntrySearchIndex, getTelecommandTokenFromLine, isRequiredParam, rankEntries } from "./search";
 
 type CachedIndex = {
@@ -177,6 +177,36 @@ async function findCdfFiles(maxFiles: number): Promise<vscode.Uri[]> {
   return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
 }
 
+async function findPidFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/pid.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/PID.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
+async function findPlfFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/plf.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/PLF.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
+async function findCveFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/cve.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/CVE.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
+async function findCvpFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/cvp.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/CVP.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
+async function findTxpFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/txp.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/TXP.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
 async function getIndexCacheKey(files: vscode.Uri[]): Promise<string> {
   const parts: string[] = [];
   for (const uri of files) {
@@ -189,7 +219,12 @@ async function getIndexCacheKey(files: vscode.Uri[]): Promise<string> {
 async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const ccfFiles = await findCcfFiles(maxFiles);
   const cdfFiles = await findCdfFiles(maxFiles);
-  const allFiles = [...ccfFiles, ...cdfFiles];
+  const pidFiles = await findPidFiles(maxFiles);
+  const plfFiles = await findPlfFiles(maxFiles);
+  const cveFiles = await findCveFiles(maxFiles);
+  const cvpFiles = await findCvpFiles(maxFiles);
+  const txpFiles = await findTxpFiles(maxFiles);
+  const allFiles = [...ccfFiles, ...cdfFiles, ...pidFiles, ...plfFiles, ...cveFiles, ...cvpFiles, ...txpFiles];
 
   if (allFiles.length === 0) {
     return null;
@@ -201,13 +236,28 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   }
 
   const ccfPayload = await Promise.all(
-    ccfFiles.map(async (uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+    ccfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
   const cdfPayload = await Promise.all(
-    cdfFiles.map(async (uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+    cdfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
+  const pidPayload = await Promise.all(
+    pidFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
+  const plfPayload = await Promise.all(
+    plfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
+  const cvePayload = await Promise.all(
+    cveFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
+  const cvpPayload = await Promise.all(
+    cvpFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
+  const txpPayload = await Promise.all(
+    txpFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
 
-  const index = buildMibIndexFromLines(ccfPayload, cdfPayload);
+  const index = buildMibIndexFromLines(ccfPayload, cdfPayload, pidPayload, plfPayload, cvePayload, cvpPayload, txpPayload);
   cachedIndex = { index, cacheKey };
   return index;
 }
@@ -246,6 +296,20 @@ function findTelecommandOnLine(lineText: string, index: MibIndex): TcEntry | und
   return findEntryCaseInsensitive(index, firstToken);
 }
 
+function formatDirectoryTree(relativePath: string): string {
+  const parts = relativePath.split("/");
+  const tree: string[] = [];
+  
+  for (let i = 0; i < parts.length; i += 1) {
+    const isLast = i === parts.length - 1;
+    const prefix = isLast ? "└─ " : "├─ ";
+    const indent = "   ".repeat(i);
+    tree.push(`${indent}${prefix}${parts[i]}`);
+  }
+  
+  return tree.join("\n");
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const hoverProvider = vscode.languages.registerHoverProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
@@ -262,6 +326,69 @@ export function activate(context: vscode.ExtensionContext): void {
         const maxFiles = config.get<number>("maxFiles", 200);
 
         const index = await loadMibIndex(maxFiles);
+        
+        // First, try to find as a parameter in any TC
+        if (index) {
+          for (const tcEntry of index.tcById.values()) {
+            const paramMatch = tcEntry.params.find(p => 
+              (p.paramId && p.paramId.toLowerCase() === token.toLowerCase()) ||
+              (p.name && p.name.toLowerCase() === token.toLowerCase())
+            );
+            
+            if (paramMatch) {
+              const md = new vscode.MarkdownString();
+              const paramName = paramMatch.name || paramMatch.paramId || "Unknown";
+              md.appendMarkdown(`**Parameter** \`${paramName}\`\n\n`);
+              
+              if (paramMatch.paramId && paramMatch.paramId !== paramName) {
+                md.appendMarkdown(`**ID:** \`${paramMatch.paramId}\`\n\n`);
+              }
+              
+              const kindMap: Record<string, string> = {
+                "R": "Required — Must be provided",
+                "A": "Optional — Auxiliary/Filler parameter",
+                "F": "Filler — Padding/unused bits",
+                "E": "Enumeration — Predefined value list",
+                "P": "Parameter — Standard parameter"
+              };
+              
+              if (paramMatch.kind) {
+                md.appendMarkdown(`**Type:** ${kindMap[paramMatch.kind] || paramMatch.kind}\n\n`);
+              }
+              
+              if (paramMatch.bitLength) {
+                md.appendMarkdown(`**Bit Length:** ${paramMatch.bitLength} bits`);
+                if (paramMatch.bitOffset) {
+                  md.appendMarkdown(` @ offset ${paramMatch.bitOffset}`);
+                }
+                md.appendMarkdown(`\n\n`);
+              }
+              
+              if (paramMatch.enumerations && paramMatch.enumerations.length > 0) {
+                md.appendMarkdown(`**Enumeration Values** — Select one of these predefined values\n`);
+                for (const enumVal of paramMatch.enumerations) {
+                  md.appendMarkdown(`- \`${enumVal}\`\n`);
+                }
+                md.appendMarkdown(`\n`);
+              } else if (paramMatch.kind === "E") {
+                md.appendMarkdown(`**Enumeration Values** — This parameter accepts enumeration values, but no specific values are defined in the MIB database\n\n`);
+              }
+              
+              // Show which TC uses this parameter
+              const tcUsageCount = Array.from(index.tcById.values()).filter(tc =>
+                tc.params.some(p => 
+                  (p.paramId === paramMatch.paramId) || 
+                  (p.name === paramMatch.name)
+                )
+              ).length;
+              md.appendMarkdown(`**Used by:** ${tcUsageCount} telecommand(s)\n\n`);
+              
+              md.isTrusted = false;
+              return new vscode.Hover(md, wordRange);
+            }
+          }
+        }
+        
         const entry = index ? findEntryCaseInsensitive(index, token) : undefined;
 
         if (entry) {
@@ -291,7 +418,7 @@ export function activate(context: vscode.ExtensionContext): void {
           }
 
           const rel = vscode.workspace.asRelativePath(vscode.Uri.file(entry.sourcePath));
-          md.appendMarkdown(`Source: ${rel}:${entry.sourceLine}\n\n`);
+          md.appendMarkdown(`**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${entry.sourceLine}\n\n`);
 
           if (entry.params.length > 0) {
             const required = entry.params.filter((param) => isRequiredParam(param.name, param.kind));
@@ -318,6 +445,43 @@ export function activate(context: vscode.ExtensionContext): void {
             }
           } else {
             md.appendMarkdown(`No parameters found in CDF.\n`);
+          }
+
+          md.isTrusted = false;
+          return new vscode.Hover(md, wordRange);
+        }
+
+        // Try telemetry (SID)
+        const telemetryEntry = index?.telemetryBySid.get(token);
+        if (telemetryEntry) {
+          const md = new vscode.MarkdownString();
+          md.appendMarkdown(`**Telemetry Packet** \`${telemetryEntry.sid}\`\n\n`);
+
+          if (telemetryEntry.description) {
+            md.appendMarkdown(`${telemetryEntry.description}\n\n`);
+          }
+
+          const details: string[] = [];
+          if (telemetryEntry.service) {
+            details.push(`Service: ${telemetryEntry.service}`);
+          }
+          if (telemetryEntry.subService) {
+            details.push(`Subservice: ${telemetryEntry.subService}`);
+          }
+          if (details.length > 0) {
+            md.appendMarkdown(`${details.join(" | ")}\n\n`);
+          }
+
+          const rel = vscode.workspace.asRelativePath(vscode.Uri.file(telemetryEntry.sourcePath));
+          md.appendMarkdown(`**Source Location**\n\`\`\`\n${formatDirectoryTree(rel)}\n\`\`\`\nLine ${telemetryEntry.sourceLine}\n\n`);
+
+          if (telemetryEntry.params.length > 0) {
+            md.appendMarkdown(`**Parameters (${telemetryEntry.params.length})**\n`);
+            for (const param of telemetryEntry.params) {
+              md.appendMarkdown(`- ${param.name}\n`);
+            }
+          } else {
+            md.appendMarkdown(`No parameters found in PLF.\n`);
           }
 
           md.isTrusted = false;
@@ -354,8 +518,20 @@ export function activate(context: vscode.ExtensionContext): void {
     await runReverseSearch(token, maxFiles, globs);
   });
 
+  const toggleSnippets = vscode.commands.registerCommand("scos2000MibHover.toggleSnippets", async () => {
+    const config = vscode.workspace.getConfiguration("scos2000MibHover");
+    const currentValue = config.get<boolean>("enableSnippets", true);
+    const newValue = !currentValue;
+    
+    await config.update("enableSnippets", newValue, vscode.ConfigurationTarget.Global);
+    
+    const statusMsg = newValue ? "enabled" : "disabled";
+    vscode.window.showInformationMessage(`SCOS-2000 Telecommand Snippets ${statusMsg}`);
+  });
+
   context.subscriptions.push(hoverProvider);
   context.subscriptions.push(reverseSearch);
+  context.subscriptions.push(toggleSnippets);
 
   const completionProvider = vscode.languages.registerCompletionItemProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
@@ -391,8 +567,18 @@ export function activate(context: vscode.ExtensionContext): void {
           for (const id of unique) {
             if (!prefix || id.toLowerCase().startsWith(lowered)) {
               const item = new vscode.CompletionItem(id, vscode.CompletionItemKind.Field);
-              item.insertText = `{${id} \$\{value\}}`;
+              
+              // Find parameter to check for enumerations
+              const param = tcEntry.params.find(p => p.paramId === id || p.name === id);
+              if (param?.enumerations && param.enumerations.length > 0) {
+                item.insertText = `{${id} \${1|${param.enumerations.join(",")}|}}`;
+              } else {
+                item.insertText = `{${id} \${1:value}}`;
+              }
+              
               item.detail = `Optional parameter for ${tcEntry.id}`;
+              item.sortText = `0_${id}`;
+              item.preselect = true;
               items.push(item);
             }
           }
@@ -411,19 +597,29 @@ export function activate(context: vscode.ExtensionContext): void {
             const label = entry.name ? `${entry.id} (${entry.name})` : entry.id;
             const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Function);
             
-            // Build snippet with TC ID + required parameters
+            const enableSnippets = config.get<boolean>("enableSnippets", true);
+            
+          // Build snippet with TC ID + required parameters
             const requiredParams = entry.params
               .filter((param) => isRequiredParam(param.name, param.kind))
               .map((param) => param.paramId || param.name)
               .filter((id) => id && id.length > 0);
             
             const unique = Array.from(new Set(requiredParams));
-            if (unique.length > 0) {
+            if (enableSnippets && unique.length > 0) {
               const snippetParts = [entry.id];
               for (let i = 0; i < unique.length; i += 1) {
                 const id = unique[i];
                 const tabStop = i + 1;
-                snippetParts.push(`{${id} \${${tabStop}:value}}`);
+                
+                // Find parameter to check for enumerations
+                const param = entry.params.find(p => p.paramId === id || p.name === id);
+                let valueSnippet = `\${${tabStop}:value}`;
+                if (param?.enumerations && param.enumerations.length > 0) {
+                  valueSnippet = `\${${tabStop}|${param.enumerations.join(",")}|}`;
+                }
+                
+                snippetParts.push(`{${id} ${valueSnippet}}`);
               }
               item.insertText = new vscode.SnippetString(snippetParts.join(" "));
               item.detail = `${entry.description ?? "Telecommand"} (${unique.length} required params)`;
@@ -431,6 +627,10 @@ export function activate(context: vscode.ExtensionContext): void {
               item.insertText = entry.id;
               item.detail = entry.description ?? "Telecommand";
             }
+            
+            // Prioritize over TCL snippets
+            item.sortText = `0_${entry.id}`;
+            item.preselect = true;
             
             items.push(item);
           }

@@ -2,7 +2,7 @@
   "name": "marks-mibs-extension",
   "displayName": "Mark's Mibs Extension",
   "description": "Hover over telecommands to see matching SCOS-2000 MIB entries.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "markkmetz",
   "engines": {
     "vscode": "^1.85.0"
@@ -19,6 +19,10 @@
       {
         "command": "scos2000MibHover.reverseSearch",
         "title": "SCOS-2000: Reverse MIB Search"
+      },
+      {
+        "command": "scos2000MibHover.toggleSnippets",
+        "title": "SCOS-2000: Toggle Telecommand Snippets"
       }
     ],
     "keybindings": [
@@ -48,6 +52,11 @@
           "type": "number",
           "default": 200,
           "description": "Maximum number of MIB files to scan on hover."
+        },
+        "scos2000MibHover.enableSnippets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic parameter snippet insertion for telecommands."
         }
       }
     }
