@@ -33,7 +33,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     const ccfIds = collectCcfIds(ccf.lines);
 
     assert.ok(ccfIds.length > 0, "Expected CCF to contain telecommands");
@@ -52,7 +52,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     const idsWithParams = Array.from(index.tcById.values())
       .filter((entry) => entry.params.length > 0)
       .map((entry) => entry.id)
@@ -80,7 +80,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     // Find a TC with parameters
     let tcWithParams: any = null;
@@ -107,7 +107,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     let foundRequired = false;
     let foundOptional = false;
@@ -131,7 +131,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     let foundBitInfo = false;
 
@@ -155,7 +155,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     let foundEnumType = false;
 
@@ -177,7 +177,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     for (const entry of index.tcById.values()) {
       for (const param of entry.params) {
@@ -194,7 +194,7 @@ describe("SCOS-2000 MIB parser", () => {
     const ccf = readDat(ccfPath);
     const cdf = readDat(cdfPath);
 
-    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], []);
+    const index = buildMibIndexFromLines([ccf], [cdf], [], [], [], [], [], []);
     
     let totalParams = 0;
     let tcsWithParams = 0;

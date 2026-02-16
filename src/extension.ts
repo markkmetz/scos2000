@@ -189,6 +189,12 @@ async function findPlfFiles(maxFiles: number): Promise<vscode.Uri[]> {
   return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
 }
 
+async function findPcfFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/pcf.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/PCF.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
 async function findCveFiles(maxFiles: number): Promise<vscode.Uri[]> {
   const lower = await vscode.workspace.findFiles("**/cve.dat", "**/node_modules/**", maxFiles);
   const upper = await vscode.workspace.findFiles("**/CVE.DAT", "**/node_modules/**", maxFiles);
@@ -221,10 +227,11 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const cdfFiles = await findCdfFiles(maxFiles);
   const pidFiles = await findPidFiles(maxFiles);
   const plfFiles = await findPlfFiles(maxFiles);
+  const pcfFiles = await findPcfFiles(maxFiles);
   const cveFiles = await findCveFiles(maxFiles);
   const cvpFiles = await findCvpFiles(maxFiles);
   const txpFiles = await findTxpFiles(maxFiles);
-  const allFiles = [...ccfFiles, ...cdfFiles, ...pidFiles, ...plfFiles, ...cveFiles, ...cvpFiles, ...txpFiles];
+  const allFiles = [...ccfFiles, ...cdfFiles, ...pidFiles, ...plfFiles, ...pcfFiles, ...cveFiles, ...cvpFiles, ...txpFiles];
 
   if (allFiles.length === 0) {
     return null;
@@ -247,6 +254,9 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const plfPayload = await Promise.all(
     plfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
+  const pcfPayload = await Promise.all(
+    pcfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
   const cvePayload = await Promise.all(
     cveFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
@@ -257,7 +267,16 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
     txpFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
 
-  const index = buildMibIndexFromLines(ccfPayload, cdfPayload, pidPayload, plfPayload, cvePayload, cvpPayload, txpPayload);
+  const index = buildMibIndexFromLines(
+    ccfPayload,
+    cdfPayload,
+    pidPayload,
+    plfPayload,
+    pcfPayload,
+    cvePayload,
+    cvpPayload,
+    txpPayload
+  );
   cachedIndex = { index, cacheKey };
   return index;
 }
@@ -478,7 +497,14 @@ export function activate(context: vscode.ExtensionContext): void {
           if (telemetryEntry.params.length > 0) {
             md.appendMarkdown(`**Parameters (${telemetryEntry.params.length})**\n`);
             for (const param of telemetryEntry.params) {
-              md.appendMarkdown(`- ${param.name}\n`);
+              const name = param.name || param.paramId || "";
+              const label = param.paramId && param.paramId !== name ? `${name} (ID: ${param.paramId})` : name;
+              md.appendMarkdown(`- ${label}\n`);
+
+              if (param.enumerations && param.enumerations.length > 0) {
+                const values = param.enumerations.map((value) => `\`${value}\``).join(", ");
+                md.appendMarkdown(`  - Values: ${values}\n`);
+              }
             }
           } else {
             md.appendMarkdown(`No parameters found in PLF.\n`);
