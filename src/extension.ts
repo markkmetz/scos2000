@@ -436,6 +436,47 @@ export function activate(context: vscode.ExtensionContext): void {
             md.appendMarkdown(`${details.join(" | ")}\n\n`);
           }
 
+          // Additional CCF metadata
+          const metadata: string[] = [];
+          if (entry.critical === "Y") {
+            metadata.push(`⚠️ Critical`);
+          }
+          if (entry.danger === "Y") {
+            metadata.push(`⚡ Danger`);
+          }
+          if (entry.planRelease === "Y") {
+            metadata.push(`📋 Plan Release`);
+          }
+          if (entry.tcType) {
+            const typeMap: Record<string, string> = {
+              "C": "Command",
+              "A": "Acknowledge",
+              "R": "Report",
+              "O": "Other",
+              "S": "Simulation",
+              "F": "FARM",
+              "T": "Test"
+            };
+            const typeName = typeMap[entry.tcType] || entry.tcType;
+            metadata.push(`Type: ${typeName}`);
+          }
+          if (entry.execMode) {
+            const execMap: Record<string, string> = {
+              "N": "Normal",
+              "L": "Later",
+              "S": "Scheduled",
+              "B": "Both"
+            };
+            const execName = execMap[entry.execMode] || entry.execMode;
+            metadata.push(`Exec: ${execName}`);
+          }
+          if (entry.mapId && entry.mapId !== "0") {
+            metadata.push(`Map: ${entry.mapId}`);
+          }
+          if (metadata.length > 0) {
+            md.appendMarkdown(`${metadata.join(" • ")}\n\n`);
+          }
+
           if (entry.params.length > 0) {
             const required = entry.params.filter((param) => isRequiredParam(param.name, param.kind));
             const optional = entry.params.filter((param) => !isRequiredParam(param.name, param.kind));
@@ -447,7 +488,13 @@ export function activate(context: vscode.ExtensionContext): void {
                 const offset = param.bitOffset ? `@${param.bitOffset}` : "";
                 const pid = param.paramId ? ` (ID: ${param.paramId})` : "";
                 md.appendMarkdown(`- ${param.name}${bits}${offset}${pid}\n`);
+                if (param.enumerations && param.enumerations.length > 0) {
+                  const enumValues = param.enumerations.slice(0, 5).map(v => `\`${v}\``).join(", ");
+                  const more = param.enumerations.length > 5 ? ` +${param.enumerations.length - 5} more` : "";
+                  md.appendMarkdown(`  - Values: ${enumValues}${more}\n`);
+                }
               }
+              md.appendMarkdown(`\n`);
             }
 
             if (optional.length > 0) {
@@ -457,6 +504,11 @@ export function activate(context: vscode.ExtensionContext): void {
                 const offset = param.bitOffset ? `@${param.bitOffset}` : "";
                 const pid = param.paramId ? ` (ID: ${param.paramId})` : "";
                 md.appendMarkdown(`- ${param.name}${bits}${offset}${pid}\n`);
+                if (param.enumerations && param.enumerations.length > 0) {
+                  const enumValues = param.enumerations.slice(0, 5).map(v => `\`${v}\``).join(", ");
+                  const more = param.enumerations.length > 5 ? ` +${param.enumerations.length - 5} more` : "";
+                  md.appendMarkdown(`  - Values: ${enumValues}${more}\n`);
+                }
               }
             }
           } else {
@@ -544,20 +596,8 @@ export function activate(context: vscode.ExtensionContext): void {
     await runReverseSearch(token, maxFiles, globs);
   });
 
-  const toggleSnippets = vscode.commands.registerCommand("scos2000MibHover.toggleSnippets", async () => {
-    const config = vscode.workspace.getConfiguration("scos2000MibHover");
-    const currentValue = config.get<boolean>("enableSnippets", true);
-    const newValue = !currentValue;
-    
-    await config.update("enableSnippets", newValue, vscode.ConfigurationTarget.Global);
-    
-    const statusMsg = newValue ? "enabled" : "disabled";
-    vscode.window.showInformationMessage(`SCOS-2000 Telecommand Snippets ${statusMsg}`);
-  });
-
   context.subscriptions.push(hoverProvider);
   context.subscriptions.push(reverseSearch);
-  context.subscriptions.push(toggleSnippets);
 
   const completionProvider = vscode.languages.registerCompletionItemProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
@@ -580,37 +620,56 @@ export function activate(context: vscode.ExtensionContext): void {
         const tcEntry = findTelecommandOnLine(lineText, index);
         console.log("Autocomplete: lineText=", lineText, "tcEntry=", tcEntry?.id, "prefix=", prefix);
 
-        // Only offer optional param completion if we found a TC on this line
-        // and we're not on the TC token itself
+        // Offer OPTIONAL parameter completion if we found a TC on this line
         if (tcEntry) {
-          // Show only OPTIONAL parameters (not required)
+          const usedParamIds = new Set<string>();
+          const usedMatches = lineText.matchAll(/\{\s*([A-Za-z0-9_]+)/g);
+          for (const match of usedMatches) {
+            const usedId = match[1];
+            if (usedId) {
+              usedParamIds.add(usedId);
+            }
+          }
+
           const optionalParams = tcEntry.params
             .filter((param) => !isRequiredParam(param.name, param.kind))
-            .map((param) => param.paramId || param.name)
-            .filter((id) => id && id.length > 0);
+            .filter((param) => {
+              const id = param.paramId || param.name;
+              return id && !usedParamIds.has(id);
+            });
 
-          const unique = Array.from(new Set(optionalParams));
+          const unique = Array.from(new Set(optionalParams
+            .map((param) => param.paramId || param.name)
+            .filter((id) => id && id.length > 0)));
           for (const id of unique) {
             if (!prefix || id.toLowerCase().startsWith(lowered)) {
-              const item = new vscode.CompletionItem(id, vscode.CompletionItemKind.Field);
-              
-              // Find parameter to check for enumerations
               const param = tcEntry.params.find(p => p.paramId === id || p.name === id);
-              if (param?.enumerations && param.enumerations.length > 0) {
-                item.insertText = `{${id} \${1|${param.enumerations.join(",")}|}}`;
-              } else {
-                item.insertText = `{${id} \${1:value}}`;
+              if (!param) continue;
+
+              const isRequired = isRequiredParam(param.name, param.kind);
+              const item = new vscode.CompletionItem(id, vscode.CompletionItemKind.Field);
+
+              // Optional params use intellisense/plain insertion
+              item.insertText = `{${id} }`;
+              item.command = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
+              
+              // Build detail with parameter info
+              const kindLabel = isRequired ? "Required" : "Optional";
+              const bits = param.bitLength ? ` (${param.bitLength}b)` : "";
+              let detail = `${kindLabel} parameter${bits}`;
+              
+              if (param.enumerations && param.enumerations.length > 0) {
+                item.documentation = `Values: ${param.enumerations.join(", ")}`;
               }
               
-              item.detail = `Optional parameter for ${tcEntry.id}`;
-              item.sortText = `0_${id}`;
-              item.preselect = true;
+              item.detail = detail;
+              item.sortText = `1_${id}`;
               items.push(item);
             }
           }
 
           if (items.length > 0) {
-            console.log("Returning optional param completions");
+            console.log("Returning parameter completions");
             return items;
           }
         }
@@ -623,36 +682,50 @@ export function activate(context: vscode.ExtensionContext): void {
             const label = entry.name ? `${entry.id} (${entry.name})` : entry.id;
             const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Function);
             
-            const enableSnippets = config.get<boolean>("enableSnippets", true);
+            // Build snippet with all required parameters
+            const requiredParams = entry.params.filter((param) => isRequiredParam(param.name, param.kind));
             
-          // Build snippet with TC ID + required parameters
-            const requiredParams = entry.params
-              .filter((param) => isRequiredParam(param.name, param.kind))
-              .map((param) => param.paramId || param.name)
-              .filter((id) => id && id.length > 0);
-            
-            const unique = Array.from(new Set(requiredParams));
-            if (enableSnippets && unique.length > 0) {
-              const snippetParts = [entry.id];
-              for (let i = 0; i < unique.length; i += 1) {
-                const id = unique[i];
-                const tabStop = i + 1;
-                
-                // Find parameter to check for enumerations
-                const param = entry.params.find(p => p.paramId === id || p.name === id);
-                let valueSnippet = `\${${tabStop}:value}`;
-                if (param?.enumerations && param.enumerations.length > 0) {
-                  valueSnippet = `\${${tabStop}|${param.enumerations.join(",")}|}`;
+            if (requiredParams.length > 0) {
+              let snippetText = entry.id;
+              let tabStopIndex = 1;
+              
+              for (const param of requiredParams) {
+                const id = param.paramId || param.name;
+                if (param.enumerations && param.enumerations.length > 0) {
+                  // Enum parameter with choices
+                  snippetText += ` {${id} \${${tabStopIndex}|${param.enumerations.join(",")}|}}`;
+                } else {
+                  // Free-form parameter
+                  snippetText += ` {${id} \${${tabStopIndex}:value}}`;
                 }
-                
-                snippetParts.push(`{${id} ${valueSnippet}}`);
+                tabStopIndex++;
               }
-              item.insertText = new vscode.SnippetString(snippetParts.join(" "));
-              item.detail = `${entry.description ?? "Telecommand"} (${unique.length} required params)`;
+              
+              item.insertText = new vscode.SnippetString(snippetText);
             } else {
-              item.insertText = entry.id;
-              item.detail = entry.description ?? "Telecommand";
+              // No required params - just insert TC ID and trigger suggest for optional params
+              item.insertText = entry.id + ' ';
+              item.command = {
+                command: 'editor.action.triggerSuggest',
+                title: 'Suggest parameters'
+              };
             }
+            
+            // Show parameter count in detail
+            const requiredCount = entry.params.filter((param) => isRequiredParam(param.name, param.kind)).length;
+            const optionalCount = entry.params.length - requiredCount;
+            let paramInfo = '';
+            if (requiredCount > 0) {
+              paramInfo = ` (${requiredCount} required`;
+              if (optionalCount > 0) {
+                paramInfo += `, ${optionalCount} optional`;
+              }
+              paramInfo += ')';
+            } else if (optionalCount > 0) {
+              paramInfo = ` (${optionalCount} optional)`;
+            }
+            
+            item.detail = `${entry.description ?? "Telecommand"}${paramInfo}`;
             
             // Prioritize over TCL snippets
             item.sortText = `0_${entry.id}`;

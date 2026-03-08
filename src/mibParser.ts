@@ -17,6 +17,12 @@ export type TcEntry = {
   serviceType?: string;
   subService?: string;
   apid?: string;
+  critical?: string;
+  mapId?: string;
+  danger?: string;
+  planRelease?: string;
+  execMode?: string;
+  tcType?: string;
   sourcePath: string;
   sourceLine: number;
   params: ParamEntry[];
@@ -71,6 +77,12 @@ export function parseCcfLines(lines: string[], sourcePath: string): TcEntry[] {
       serviceType: cols[6],
       subService: cols[7],
       apid: cols[8],
+      critical: cols[4],
+      mapId: cols[9],
+      danger: cols[10],
+      planRelease: cols[11],
+      execMode: cols[12],
+      tcType: cols[13],
       sourcePath,
       sourceLine: i + 1,
       params: []
