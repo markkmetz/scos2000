@@ -32,10 +32,18 @@ export type TelemetryEntry = {
   params: ParamEntry[];
 };
 
+export type TxfEntry = {
+  calibId: string;
+  description: string;
+  rawFormat?: string;
+  numAliases?: number;
+};
+
 export type MibIndex = {
   tcById: Map<string, TcEntry>;
   tcByName: Map<string, TcEntry>;
   telemetryBySid: Map<string, TelemetryEntry>;
+  txfByCalibId: Map<string, TxfEntry>;
 };
 
 type PcfEntry = {
@@ -295,6 +303,31 @@ export function parseCdfLines(lines: string[], tcById: Map<string, TcEntry>): vo
   }
 }
 
+export function parseTxfLines(lines: string[]): Map<string, TxfEntry> {
+  const entries = new Map<string, TxfEntry>();
+
+  for (const line of lines) {
+    if (!line || line.trim().length === 0 || line.trim().startsWith("#")) {
+      continue;
+    }
+
+    const cols = splitDatLine(line);
+    const calibId = cols[0];
+    if (!calibId) {
+      continue;
+    }
+
+    entries.set(calibId, {
+      calibId,
+      description: cols[1] ?? "",
+      rawFormat: cols[2] || undefined,
+      numAliases: cols[3] ? (isNaN(parseInt(cols[3], 10)) ? undefined : parseInt(cols[3], 10)) : undefined
+    });
+  }
+
+  return entries;
+}
+
 export function buildMibIndexFromLines(
   ccfFiles: Array<{ path: string; lines: string[] }>,
   cdfFiles: Array<{ path: string; lines: string[] }>,
@@ -303,12 +336,14 @@ export function buildMibIndexFromLines(
   pcfFiles: Array<{ path: string; lines: string[] }>,
   cveFiles: Array<{ path: string; lines: string[] }>,
   cvpFiles: Array<{ path: string; lines: string[] }>,
-  txpFiles: Array<{ path: string; lines: string[] }>
+  txpFiles: Array<{ path: string; lines: string[] }>,
+  txfFiles: Array<{ path: string; lines: string[] }> = []
 ): MibIndex {
   const tcById = new Map<string, TcEntry>();
   const tcByName = new Map<string, TcEntry>();
   const telemetryBySid = new Map<string, TelemetryEntry>();
   const pcfByParamId = new Map<string, PcfEntry>();
+  const txfByCalibId = new Map<string, TxfEntry>();
 
   for (const file of ccfFiles) {
     const entries = parseCcfLines(file.lines, file.path);
@@ -356,5 +391,14 @@ export function buildMibIndexFromLines(
     parseTxpLines(file.lines, telemetryBySid);
   }
 
-  return { tcById, tcByName, telemetryBySid };
+  for (const file of txfFiles) {
+    const entries = parseTxfLines(file.lines);
+    for (const [calibId, entry] of entries) {
+      if (!txfByCalibId.has(calibId)) {
+        txfByCalibId.set(calibId, entry);
+      }
+    }
+  }
+
+  return { tcById, tcByName, telemetryBySid, txfByCalibId };
 }
