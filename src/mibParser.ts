@@ -51,6 +51,13 @@ type PcfEntry = {
   raw: string[];
 };
 
+type CpcEntry = {
+  paramId: string;
+  name?: string;
+  enumSetId?: string;
+  raw: string[];
+};
+
 function splitDatLine(line: string): string[] {
   return line.split("\t").map((value) => value.trim());
 }
@@ -141,6 +148,31 @@ export function parsePcfLines(lines: string[]): Map<string, PcfEntry> {
       paramId,
       name: cols[1],
       enumSetId: cols[11],
+      raw: cols
+    });
+  }
+
+  return entries;
+}
+
+export function parseCpcLines(lines: string[]): Map<string, CpcEntry> {
+  const entries = new Map<string, CpcEntry>();
+
+  for (const line of lines) {
+    if (!line || line.trim().length === 0 || line.trim().startsWith("#")) {
+      continue;
+    }
+
+    const cols = splitDatLine(line);
+    const paramId = cols[0];
+    if (!paramId) {
+      continue;
+    }
+
+    entries.set(paramId, {
+      paramId,
+      name: cols[1],
+      enumSetId: cols[10],
       raw: cols
     });
   }
@@ -278,6 +310,46 @@ export function parseTxpLines(lines: string[], telemetryBySid: Map<string, Telem
   }
 }
 
+export function parsePasLines(
+  lines: string[],
+  tcById: Map<string, TcEntry>,
+  cpcByParamId: Map<string, CpcEntry>
+): void {
+  const enumsByEnumSetId = new Map<string, Set<string>>();
+
+  for (const line of lines) {
+    if (!line || line.trim().length === 0 || line.trim().startsWith("#")) {
+      continue;
+    }
+
+    const cols = splitDatLine(line);
+    const enumSetId = cols[0];
+    const enumValue = cols[1];
+
+    if (!enumSetId || !enumValue) {
+      continue;
+    }
+
+    if (!enumsByEnumSetId.has(enumSetId)) {
+      enumsByEnumSetId.set(enumSetId, new Set());
+    }
+
+    enumsByEnumSetId.get(enumSetId)!.add(enumValue.trim());
+  }
+
+  // Attach enumeration values to TC parameters via CPC enumSetId linkage
+  for (const entry of tcById.values()) {
+    for (const param of entry.params) {
+      if (param.paramId) {
+        const cpcEntry = cpcByParamId.get(param.paramId);
+        if (cpcEntry?.enumSetId && enumsByEnumSetId.has(cpcEntry.enumSetId)) {
+          param.enumerations = Array.from(enumsByEnumSetId.get(cpcEntry.enumSetId)!).sort();
+        }
+      }
+    }
+  }
+}
+
 export function parseCdfLines(lines: string[], tcById: Map<string, TcEntry>): void {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -313,14 +385,17 @@ export function buildMibIndexFromLines(
   pidFiles: Array<{ path: string; lines: string[] }>,
   plfFiles: Array<{ path: string; lines: string[] }>,
   pcfFiles: Array<{ path: string; lines: string[] }>,
+  cpcFiles: Array<{ path: string; lines: string[] }>,
   cveFiles: Array<{ path: string; lines: string[] }>,
   cvpFiles: Array<{ path: string; lines: string[] }>,
-  txpFiles: Array<{ path: string; lines: string[] }>
+  txpFiles: Array<{ path: string; lines: string[] }>,
+  pasFiles: Array<{ path: string; lines: string[] }>
 ): MibIndex {
   const tcById = new Map<string, TcEntry>();
   const tcByName = new Map<string, TcEntry>();
   const telemetryBySid = new Map<string, TelemetryEntry>();
   const pcfByParamId = new Map<string, PcfEntry>();
+  const cpcByParamId = new Map<string, CpcEntry>();
 
   for (const file of ccfFiles) {
     const entries = parseCcfLines(file.lines, file.path);
@@ -352,6 +427,15 @@ export function buildMibIndexFromLines(
     }
   }
 
+  for (const file of cpcFiles) {
+    const entries = parseCpcLines(file.lines);
+    for (const [paramId, entry] of entries) {
+      if (!cpcByParamId.has(paramId)) {
+        cpcByParamId.set(paramId, entry);
+      }
+    }
+  }
+
   for (const file of plfFiles) {
     parsePlfLines(file.lines, telemetryBySid, pcfByParamId);
   }
@@ -366,6 +450,10 @@ export function buildMibIndexFromLines(
 
   for (const file of txpFiles) {
     parseTxpLines(file.lines, telemetryBySid);
+  }
+
+  for (const file of pasFiles) {
+    parsePasLines(file.lines, tcById, cpcByParamId);
   }
 
   return { tcById, tcByName, telemetryBySid };

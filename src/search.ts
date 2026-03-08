@@ -86,3 +86,22 @@ export function isRequiredParam(paramName: string, kind?: string): boolean {
 
   return true;
 }
+
+export function getAvailableOptionalParamIds(entry: TcEntry, lineText: string): string[] {
+  const usedParamIds = new Set<string>();
+  const usedMatches = lineText.matchAll(/\{\s*([A-Za-z0-9_]+)/g);
+  for (const match of usedMatches) {
+    const usedId = match[1];
+    if (usedId) {
+      usedParamIds.add(usedId);
+    }
+  }
+
+  const optionalParamIds = entry.params
+    .filter((param) => !isRequiredParam(param.name, param.kind))
+    .map((param) => param.paramId || param.name)
+    .filter((id): id is string => Boolean(id && id.length > 0))
+    .filter((id) => !usedParamIds.has(id));
+
+  return Array.from(new Set(optionalParamIds));
+}

@@ -1,0 +1,25 @@
+# Exclude source files (only include compiled output)
+src/**
+test/**
+*.test.ts
+
+# Exclude TypeScript config
+tsconfig.json
+
+# Exclude development files
+.vscode/**
+.gitignore
+.git/**
+
+# Exclude all VSIX packages
+*.vsix
+
+# Exclude node modules (included by default but explicit)
+node_modules/**
+
+# Exclude package lock (optional - some include it)
+package-lock.json
+
+# Include the compiled JS output
+!out/**/*.js
+!out/**/*.js.map

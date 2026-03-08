@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { buildMibIndexFromLines, MibIndex, TcEntry, TelemetryEntry } from "./mibParser";
-import { buildEntrySearchIndex, getTelecommandTokenFromLine, isRequiredParam, rankEntries } from "./search";
+import { buildEntrySearchIndex, getAvailableOptionalParamIds, getTelecommandTokenFromLine, isRequiredParam, rankEntries } from "./search";
 
 type CachedIndex = {
   index: MibIndex;
@@ -195,6 +195,12 @@ async function findPcfFiles(maxFiles: number): Promise<vscode.Uri[]> {
   return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
 }
 
+async function findCpcFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/cpc.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/CPC.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
 async function findCveFiles(maxFiles: number): Promise<vscode.Uri[]> {
   const lower = await vscode.workspace.findFiles("**/cve.dat", "**/node_modules/**", maxFiles);
   const upper = await vscode.workspace.findFiles("**/CVE.DAT", "**/node_modules/**", maxFiles);
@@ -213,6 +219,12 @@ async function findTxpFiles(maxFiles: number): Promise<vscode.Uri[]> {
   return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
 }
 
+async function findPasFiles(maxFiles: number): Promise<vscode.Uri[]> {
+  const lower = await vscode.workspace.findFiles("**/pas.dat", "**/node_modules/**", maxFiles);
+  const upper = await vscode.workspace.findFiles("**/PAS.DAT", "**/node_modules/**", maxFiles);
+  return Array.from(new Map([...lower, ...upper].map((f) => [f.toString(), f])).values());
+}
+
 async function getIndexCacheKey(files: vscode.Uri[]): Promise<string> {
   const parts: string[] = [];
   for (const uri of files) {
@@ -228,10 +240,12 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const pidFiles = await findPidFiles(maxFiles);
   const plfFiles = await findPlfFiles(maxFiles);
   const pcfFiles = await findPcfFiles(maxFiles);
+  const cpcFiles = await findCpcFiles(maxFiles);
   const cveFiles = await findCveFiles(maxFiles);
   const cvpFiles = await findCvpFiles(maxFiles);
   const txpFiles = await findTxpFiles(maxFiles);
-  const allFiles = [...ccfFiles, ...cdfFiles, ...pidFiles, ...plfFiles, ...pcfFiles, ...cveFiles, ...cvpFiles, ...txpFiles];
+  const pasFiles = await findPasFiles(maxFiles);
+  const allFiles = [...ccfFiles, ...cdfFiles, ...pidFiles, ...plfFiles, ...pcfFiles, ...cpcFiles, ...cveFiles, ...cvpFiles, ...txpFiles, ...pasFiles];
 
   if (allFiles.length === 0) {
     return null;
@@ -257,6 +271,9 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const pcfPayload = await Promise.all(
     pcfFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
+  const cpcPayload = await Promise.all(
+    cpcFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
   const cvePayload = await Promise.all(
     cveFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
@@ -266,6 +283,9 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
   const txpPayload = await Promise.all(
     txpFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
   );
+  const pasPayload = await Promise.all(
+    pasFiles.map(async (uri: vscode.Uri) => ({ path: uri.fsPath, lines: await readDatLines(uri) }))
+  );
 
   const index = buildMibIndexFromLines(
     ccfPayload,
@@ -273,9 +293,11 @@ async function loadMibIndex(maxFiles: number): Promise<MibIndex | null> {
     pidPayload,
     plfPayload,
     pcfPayload,
+    cpcPayload,
     cvePayload,
     cvpPayload,
-    txpPayload
+    txpPayload,
+    pasPayload
   );
   cachedIndex = { index, cacheKey };
   return index;
@@ -602,9 +624,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const completionProvider = vscode.languages.registerCompletionItemProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
     {
-      async provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
+      async provideCompletionItems(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        _token: vscode.CancellationToken,
+        context: vscode.CompletionContext
+      ) {
         const wordRange = document.getWordRangeAtPosition(position, /[A-Za-z0-9_\-]+/);
-        const prefix = wordRange ? document.getText(wordRange) : "";
+        const wordPrefix = wordRange ? document.getText(wordRange) : "";
 
         const config = vscode.workspace.getConfiguration("scos2000MibHover");
         const maxFiles = config.get<number>("maxFiles", 200);
@@ -614,44 +641,36 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const items: vscode.CompletionItem[] = [];
-        const lowered = prefix.toLowerCase();
+        const lowered = wordPrefix.toLowerCase();
 
         const lineText = document.lineAt(position.line).text;
+        const linePrefix = lineText.slice(0, position.character);
+        const paramPrefixMatch = linePrefix.match(/\{\s*([A-Za-z0-9_]*)$/);
+        const paramPrefix = paramPrefixMatch ? paramPrefixMatch[1] : "";
+        const loweredParamPrefix = paramPrefix.toLowerCase();
         const tcEntry = findTelecommandOnLine(lineText, index);
-        console.log("Autocomplete: lineText=", lineText, "tcEntry=", tcEntry?.id, "prefix=", prefix);
+        console.log("Autocomplete: lineText=", lineText, "tcEntry=", tcEntry?.id, "wordPrefix=", wordPrefix, "paramPrefix=", paramPrefix);
+
+        const triggeredBySpace = context.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter
+          && context.triggerCharacter === " ";
 
         // Offer OPTIONAL parameter completion if we found a TC on this line
         if (tcEntry) {
-          const usedParamIds = new Set<string>();
-          const usedMatches = lineText.matchAll(/\{\s*([A-Za-z0-9_]+)/g);
-          for (const match of usedMatches) {
-            const usedId = match[1];
-            if (usedId) {
-              usedParamIds.add(usedId);
-            }
-          }
-
-          const optionalParams = tcEntry.params
-            .filter((param) => !isRequiredParam(param.name, param.kind))
-            .filter((param) => {
-              const id = param.paramId || param.name;
-              return id && !usedParamIds.has(id);
-            });
-
-          const unique = Array.from(new Set(optionalParams
-            .map((param) => param.paramId || param.name)
-            .filter((id) => id && id.length > 0)));
+          const unique = getAvailableOptionalParamIds(tcEntry, lineText);
           for (const id of unique) {
-            if (!prefix || id.toLowerCase().startsWith(lowered)) {
+            if (!paramPrefix || id.toLowerCase().startsWith(loweredParamPrefix)) {
               const param = tcEntry.params.find(p => p.paramId === id || p.name === id);
               if (!param) continue;
 
               const isRequired = isRequiredParam(param.name, param.kind);
               const item = new vscode.CompletionItem(id, vscode.CompletionItemKind.Field);
 
-              // Optional params use intellisense/plain insertion
-              item.insertText = `{${id} }`;
-              item.command = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
+              // Optional params use intellisense list + snippet insertion
+              if (param.enumerations && param.enumerations.length > 0) {
+                item.insertText = new vscode.SnippetString(`{${id} \${1|${param.enumerations.join(",")}|}}`);
+              } else {
+                item.insertText = new vscode.SnippetString(`{${id} \${1:value}}`);
+              }
               
               // Build detail with parameter info
               const kindLabel = isRequired ? "Required" : "Optional";
@@ -674,11 +693,17 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         }
 
+        // If this invocation came specifically from a space trigger and we didn't match a TC line,
+        // do not spam global TC suggestions.
+        if (triggeredBySpace && !tcEntry) {
+          return undefined;
+        }
+
         for (const entry of index.tcById.values()) {
           const idMatch = entry.id.toLowerCase().startsWith(lowered);
           const nameMatch = entry.name ? entry.name.toLowerCase().startsWith(lowered) : false;
 
-          if (!prefix || idMatch || nameMatch) {
+          if (!wordPrefix || idMatch || nameMatch) {
             const label = entry.name ? `${entry.id} (${entry.name})` : entry.id;
             const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Function);
             
@@ -702,6 +727,10 @@ export function activate(context: vscode.ExtensionContext): void {
               }
               
               item.insertText = new vscode.SnippetString(snippetText);
+              item.command = {
+                command: 'editor.action.triggerSuggest',
+                title: 'Suggest optional parameters'
+              };
             } else {
               // No required params - just insert TC ID and trigger suggest for optional params
               item.insertText = entry.id + ' ';
@@ -743,10 +772,79 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     },
     "_",
-    "-"
+    "-",
+    "{",
+    " "
   );
 
   context.subscriptions.push(completionProvider);
+
+  let lastAutoSuggestKey = "";
+  let lastAutoSuggestTime = 0;
+
+  const enumValueAutoSuggest = vscode.window.onDidChangeTextEditorSelection(async (event) => {
+    const editor = event.textEditor;
+    const selection = editor.selection;
+    if (!selection.isEmpty) {
+      return;
+    }
+
+    const document = editor.document;
+    if (document.languageId !== "tcl" && document.languageId !== "plaintext") {
+      return;
+    }
+
+    const position = selection.active;
+    const lineText = document.lineAt(position.line).text;
+    const linePrefix = lineText.slice(0, position.character);
+
+    const lastOpenBrace = linePrefix.lastIndexOf("{");
+    const lastCloseBrace = linePrefix.lastIndexOf("}");
+    if (lastOpenBrace <= lastCloseBrace) {
+      return;
+    }
+
+    const inside = linePrefix.slice(lastOpenBrace + 1);
+    const insideTrim = inside.trimStart();
+    const match = insideTrim.match(/^([A-Za-z0-9_]+)\s+([A-Za-z0-9_]*)$/);
+    if (!match) {
+      return;
+    }
+
+    const paramId = match[1];
+    if (!paramId) {
+      return;
+    }
+
+    const config = vscode.workspace.getConfiguration("scos2000MibHover");
+    const maxFiles = config.get<number>("maxFiles", 200);
+    const index = await loadMibIndex(maxFiles);
+    if (!index) {
+      return;
+    }
+
+    const tcEntry = findTelecommandOnLine(lineText, index);
+    if (!tcEntry) {
+      return;
+    }
+
+    const param = tcEntry.params.find((p) => (p.paramId || p.name) === paramId);
+    if (!param?.enumerations || param.enumerations.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const key = `${document.uri.toString()}:${position.line}:${position.character}:${paramId}`;
+    if (key === lastAutoSuggestKey && now - lastAutoSuggestTime < 300) {
+      return;
+    }
+
+    lastAutoSuggestKey = key;
+    lastAutoSuggestTime = now;
+    void vscode.commands.executeCommand("editor.action.triggerSuggest");
+  });
+
+  context.subscriptions.push(enumValueAutoSuggest);
 }
 
 export function deactivate(): void {
