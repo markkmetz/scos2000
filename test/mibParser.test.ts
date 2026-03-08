@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import { buildMibIndexFromLines } from "../src/mibParser";
+import { buildMibIndexFromLines, parseTxfLines } from "../src/mibParser";
 
 type DatFile = { path: string; lines: string[] };
 
@@ -209,6 +209,70 @@ describe("SCOS-2000 MIB parser", () => {
     assert.ok(tcsWithParams > 0, "Expected TCs with parameters");
     assert.ok(totalParams > tcsWithParams, "Expected multiple parameters per TC on average");
     assert.ok(totalParams >= 150, "Expected significant number of total parameters");
+  });
+});
+
+describe("TXF (Textual Calibration) parser", () => {
+  const base = path.resolve(__dirname, "..", "mibs", "ASCII_CSIM");
+  const txfPath = path.join(base, "txf.dat");
+
+  it("parses calibration entries from txf.dat", () => {
+    const txf = readDat(txfPath);
+    const entries = parseTxfLines(txf.lines);
+
+    assert.ok(entries.size > 0, "Expected txf.dat to contain calibration entries");
+  });
+
+  it("stores calibration ID, description, rawFormat, and numAliases", () => {
+    const txf = readDat(txfPath);
+    const entries = parseTxfLines(txf.lines);
+
+    const entry = entries.get("ZUKT0001TM");
+    assert.ok(entry, "Expected to find calibration ZUKT0001TM");
+    assert.strictEqual(entry!.calibId, "ZUKT0001TM");
+    assert.ok(entry!.description.length > 0, "Calibration should have a description");
+    assert.ok(entry!.rawFormat !== undefined, "Calibration should have a raw format");
+    assert.ok(entry!.numAliases !== undefined, "Calibration should have a numAliases count");
+  });
+
+  it("parses numAliases as a number", () => {
+    const txf = readDat(txfPath);
+    const entries = parseTxfLines(txf.lines);
+
+    for (const entry of entries.values()) {
+      assert.strictEqual(
+        typeof entry.numAliases,
+        "number",
+        `numAliases should be a number for ${entry.calibId}`
+      );
+    }
+  });
+
+  it("skips blank and comment lines", () => {
+    const lines = [
+      "# This is a comment",
+      "",
+      "CALIB1\tTest Calibration\tU\t3",
+      "  ",
+      "CALIB2\tAnother Calibration\tI\t5"
+    ];
+    const entries = parseTxfLines(lines);
+    assert.strictEqual(entries.size, 2, "Should parse exactly 2 calibration entries");
+    assert.ok(entries.has("CALIB1"), "Should have CALIB1");
+    assert.ok(entries.has("CALIB2"), "Should have CALIB2");
+  });
+
+  it("is included in MibIndex when txf files are provided", () => {
+    const txf = readDat(txfPath);
+    const index = buildMibIndexFromLines([], [], [], [], [], [], [], [], [txf]);
+
+    assert.ok(index.txfByCalibId.size > 0, "MibIndex should contain txf entries");
+    assert.ok(index.txfByCalibId.has("ZUKT0001TM"), "MibIndex should contain ZUKT0001TM calibration");
+  });
+
+  it("MibIndex txfByCalibId is empty when no txf files are provided", () => {
+    const index = buildMibIndexFromLines([], [], [], [], [], [], [], []);
+    assert.strictEqual(index.txfByCalibId.size, 0, "MibIndex should have empty txfByCalibId when no txf files given");
   });
 });
 
