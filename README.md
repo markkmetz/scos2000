@@ -1,40 +1,59 @@
-# SCOS-2000 MIB Hover (VS Code Extension)
+# SCOS-2000 MIB Hover
 
-Hover over telecommand names to see matching entries in MIB text files in your workspace.
+VS Code extension for poking at SCOS MIB stuff.
 
-## Features
-- Hover over a token (e.g., `TC_FOO_BAR`) in a plaintext or Tcl file.
-- The hover shows matching lines from MIB files in the workspace.
-- For SCOS-2000 ASCII MIBs, the hover parses `ccf.dat` for telecommand metadata and `cdf.dat` for parameters.
+It mostly targets ASCII SCOS `.dat` files.
+There is also a dumb text search fallback for files matched by the configured globs.
 
-## Setup
-1. Install dependencies:
-   - `npm install`
-2. Build:
-   - `npm run compile`
-3. Press `F5` to launch an Extension Development Host.
+## What it does
 
-## Configuration
-- `scos2000MibHover.mibGlobs`: Glob patterns to scan for MIBs. Default: `**/*.mib`, `**/*.txt`, `**/pcf.dat`, `**/pcd.dat`, `**/tcd.dat`, `**/vpd.dat`, `**/*.dat`
-- `scos2000MibHover.maxFiles`: Maximum number of MIB files to scan on hover. Default: `200`
+- Hover telecommand names and show parsed MIB info.
+- Show TC params if `ccf.dat` and `cdf.dat` are around.
+- Show some TM info from `pid.dat`, `plf.dat`, `pcf.dat`, `txp.dat` and friends.
+- Run reverse search from the command palette.
 
-## Sample MIB
-A minimal sample file is included at:
+## What it expects
+
+Real parsed features are based on these SCOS table names:
+
+- `ccf.dat`
+- `cdf.dat`
+- `pid.dat`
+- `plf.dat`
+- `pcf.dat`
+- `cpc.dat`
+- `cve.dat`
+- `cvp.dat`
+- `txp.dat`
+- `pas.dat`
+
+Case does not matter. `.DAT` works too.
+
+If those files are not there, the extension can still do plain text matches over files from `scos2000MibHover.mibGlobs`.
+
+## Run it
+
+1. `npm install`
+2. `npm run compile`
+3. Press `F5`
+
+## Config
+
+- `scos2000MibHover.enabledFileExtensions`: file types where the extension is active. Default is `.tcl`.
+- `scos2000MibHover.mibGlobs`: extra files for fallback text search. Current default is `**/*.mib`, `**/*.txt`.
+- `scos2000MibHover.maxFiles`: max files to scan. Default is `200`.
+
+## Test data
+
 - `mibs/sample.mib`
-
-## ASCII_CSIM MIB dataset
-Pulled from:
-- https://github.com/oswald2/AURIS/tree/master/esa-mib/ASCII_CSIM
-
-Local path:
 - `mibs/ASCII_CSIM/`
 
-License:
-- BSD 3-Clause (see https://github.com/oswald2/AURIS/blob/master/esa-mib/LICENSE)
+ASCII_CSIM came from:
+https://github.com/oswald2/AURIS/tree/master/esa-mib/ASCII_CSIM
 
-## Next Steps
-- Parse real SCOS-2000 MIB formats (e.g., `*.dat`, `*.mib`) more precisely.
-- Add parameter validation for telecommands.
+License there is BSD 3-Clause.
 
-## Public MIBs for testing
-If you have a URL or dataset you can share, I can add it to the workspace and wire it into the hover provider.
+## Notes
+
+- README is short on purpose.
+- If something looks wrong, check the code.
