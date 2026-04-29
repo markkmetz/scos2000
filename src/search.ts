@@ -105,3 +105,22 @@ export function getAvailableOptionalParamIds(entry: TcEntry, lineText: string): 
 
   return Array.from(new Set(optionalParamIds));
 }
+
+export function normalizeCompletionToken(value: string): string {
+  return value.trim().replace(/^[^A-Za-z0-9_]+|[^A-Za-z0-9_]+$/g, "");
+}
+
+export function shouldShowFullEnumList(selectedText: string | undefined, valuePrefix: string): boolean {
+  if (!selectedText) {
+    return false;
+  }
+
+  const normalizedSelected = normalizeCompletionToken(selectedText).toLowerCase();
+  const normalizedPrefix = normalizeCompletionToken(valuePrefix).toLowerCase();
+
+  if (!normalizedSelected || !normalizedPrefix) {
+    return false;
+  }
+
+  return normalizedSelected === normalizedPrefix;
+}

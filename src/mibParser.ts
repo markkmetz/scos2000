@@ -42,6 +42,7 @@ export type MibIndex = {
   tcById: Map<string, TcEntry>;
   tcByName: Map<string, TcEntry>;
   telemetryBySid: Map<string, TelemetryEntry>;
+  pcfByParamId: Map<string, PcfEntry>;
 };
 
 type PcfEntry = {
@@ -456,5 +457,5 @@ export function buildMibIndexFromLines(
     parsePasLines(file.lines, tcById, cpcByParamId);
   }
 
-  return { tcById, tcByName, telemetryBySid };
+  return { tcById, tcByName, telemetryBySid, pcfByParamId };
 }

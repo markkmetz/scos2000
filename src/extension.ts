@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { buildMibIndexFromLines, MibIndex, TcEntry, TelemetryEntry } from "./mibParser";
-import { buildEntrySearchIndex, getAvailableOptionalParamIds, getTelecommandTokenFromLine, isRequiredParam, rankEntries } from "./search";
+import { buildEntrySearchIndex, getAvailableOptionalParamIds, getTelecommandTokenFromLine, isRequiredParam, rankEntries, shouldShowFullEnumList } from "./search";
 
 type CachedIndex = {
   index: MibIndex;
@@ -8,6 +9,77 @@ type CachedIndex = {
 };
 
 let cachedIndex: CachedIndex | null = null;
+
+function getEnabledFileTokens(): string[] {
+  const config = vscode.workspace.getConfiguration("scos2000MibHover");
+  const raw = config.get<string>("enabledFileExtensions", ".tcl");
+  const tokens = raw
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
+
+  return tokens.length > 0 ? tokens : [".tcl"];
+}
+
+function isFeatureEnabledForDocument(document: vscode.TextDocument): boolean {
+  const tokens = getEnabledFileTokens();
+  if (tokens.includes("*")) {
+    return true;
+  }
+
+  const extension = path.extname(document.fileName).toLowerCase();
+  const languageId = document.languageId.toLowerCase();
+  const extWithoutDot = extension.startsWith(".") ? extension.slice(1) : extension;
+
+  return tokens.some((token) => {
+    if (token.startsWith(".")) {
+      return token === extension;
+    }
+    return token === languageId || token === extWithoutDot;
+  });
+}
+
+function buildTelecommandSnippet(entry: TcEntry): vscode.SnippetString {
+  const requiredParams = entry.params.filter((param) => isRequiredParam(param.name, param.kind));
+  if (requiredParams.length === 0) {
+    return new vscode.SnippetString(`${entry.id} `);
+  }
+
+  let snippetText = entry.id;
+  let tabStopIndex = 1;
+
+  for (const param of requiredParams) {
+    const id = param.paramId || param.name;
+    if (param.enumerations && param.enumerations.length > 0) {
+      snippetText += ` {${id} \${${tabStopIndex}|${param.enumerations.join(",")}|}}`;
+    } else {
+      snippetText += ` {${id} \${${tabStopIndex}:value}}`;
+    }
+    tabStopIndex += 1;
+  }
+
+  return new vscode.SnippetString(snippetText);
+}
+
+function getParamValueContext(linePrefix: string): { paramId: string; valuePrefix: string } | undefined {
+  const lastOpenBrace = linePrefix.lastIndexOf("{");
+  const lastCloseBrace = linePrefix.lastIndexOf("}");
+  if (lastOpenBrace <= lastCloseBrace) {
+    return undefined;
+  }
+
+  const inside = linePrefix.slice(lastOpenBrace + 1);
+  const insideTrim = inside.trimStart();
+  const match = insideTrim.match(/^([A-Za-z0-9_]+)\s+([A-Za-z0-9_]*)$/);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    paramId: match[1],
+    valuePrefix: match[2] ?? ""
+  };
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -57,6 +129,8 @@ async function findMibMatches(
 
 type ReverseResult =
   | { kind: "tc"; entry: TcEntry }
+  | { kind: "tm"; telemetryEntry: TelemetryEntry }
+  | { kind: "tmParam"; paramId: string; paramName: string; sourcePath: string }
   | { kind: "text"; match: { uri: vscode.Uri; line: number; text: string } };
 
 type QuickPickResult = vscode.QuickPickItem & { result: ReverseResult };
@@ -90,7 +164,7 @@ async function runReverseSearch(
 
   const quickPick = vscode.window.createQuickPick<QuickPickResult>();
   quickPick.title = "SCOS-2000 Reverse MIB Search";
-  quickPick.placeholder = "Type to search telecommand name/ID, parameters, then description";
+  quickPick.placeholder = "Type to search TCs, TM parameters, HK packets by name/description";
   quickPick.matchOnDescription = true;
   quickPick.matchOnDetail = false;
   quickPick.value = token ?? "";
@@ -99,11 +173,59 @@ async function runReverseSearch(
   const limit = 200;
 
   const updateItems = async (query: string) => {
+    const items: QuickPickResult[] = [];
+    const queryLower = query.toLowerCase();
+
+    // Search TCs
     if (entryIndex.length > 0) {
-      quickPick.items = buildQuickPickItems(entryIndex, query, limit);
-      if (quickPick.items.length > 0) {
-        return;
+      const tcItems = buildQuickPickItems(entryIndex, query, limit);
+      items.push(...tcItems);
+    }
+
+    // Search TM parameters from PCF
+    if (index && query.trim().length > 0) {
+      for (const [paramId, pcfEntry] of index.pcfByParamId.entries()) {
+        const paramIdLower = paramId.toLowerCase();
+        const nameLower = (pcfEntry.name ?? "").toLowerCase();
+        
+        if (paramIdLower.includes(queryLower) || nameLower.includes(queryLower)) {
+          const matchType = paramIdLower.includes(queryLower) ? "Match: Param ID" : "Match: Param Name";
+          items.push({
+            label: `${paramId} (${pcfEntry.name ?? ""})`,
+            description: "TM Parameter",
+            detail: `${matchType} • TM parameter`,
+            result: { 
+              kind: "tmParam", 
+              paramId, 
+              paramName: pcfEntry.name ?? "",
+              sourcePath: "" // PCF doesn't have a single source file
+            }
+          });
+          if (items.length >= limit) break;
+        }
       }
+
+      // Search HK/TM packets from telemetry index
+      for (const [sid, tmEntry] of index.telemetryBySid.entries()) {
+        const sidLower = sid.toLowerCase();
+        const descLower = (tmEntry.description ?? "").toLowerCase();
+        
+        if (sidLower.includes(queryLower) || descLower.includes(queryLower)) {
+          const matchType = sidLower.includes(queryLower) ? "Match: SID" : "Match: Description";
+          items.push({
+            label: `${sid} - ${tmEntry.description ?? "No description"}`,
+            description: "HK/TM Packet",
+            detail: `${matchType} • ${tmEntry.sourcePath}`,
+            result: { kind: "tm", telemetryEntry: tmEntry }
+          });
+          if (items.length >= limit) break;
+        }
+      }
+    }
+
+    if (items.length > 0) {
+      quickPick.items = items;
+      return;
     }
 
     if (query.trim().length === 0) {
@@ -135,23 +257,46 @@ async function runReverseSearch(
       return;
     }
 
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage("Open a target editor to insert the selected value.");
+      return;
+    }
+
     if (selection.result.kind === "tc") {
       const entry = selection.result.entry;
-      const uri = vscode.Uri.file(entry.sourcePath);
-      const document = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(document);
-      const position = new vscode.Position(Math.max(entry.sourceLine - 1, 0), 0);
-      editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(new vscode.Range(position, position));
+      const snippet = buildTelecommandSnippet(entry);
+      await editor.insertSnippet(snippet);
+      void vscode.commands.executeCommand("editor.action.triggerSuggest");
+      return;
+    }
+
+    if (selection.result.kind === "tm") {
+      const tmEntry = selection.result.telemetryEntry;
+      await editor.edit((editBuilder) => {
+        for (const selectionRange of editor.selections) {
+          editBuilder.replace(selectionRange, tmEntry.sid);
+        }
+      });
+      return;
+    }
+
+    if (selection.result.kind === "tmParam") {
+      const paramId = selection.result.paramId;
+      await editor.edit((editBuilder) => {
+        for (const selectionRange of editor.selections) {
+          editBuilder.replace(selectionRange, paramId);
+        }
+      });
       return;
     }
 
     const { uri, line } = selection.result.match;
     const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document);
+    const sourceEditor = await vscode.window.showTextDocument(document);
     const position = new vscode.Position(Math.max(line - 1, 0), 0);
-    editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(new vscode.Range(position, position));
+    sourceEditor.selection = new vscode.Selection(position, position);
+    sourceEditor.revealRange(new vscode.Range(position, position));
   });
 
   const onHide = quickPick.onDidHide(() => {
@@ -351,11 +496,150 @@ function formatDirectoryTree(relativePath: string): string {
   return tree.join("\n");
 }
 
+// Cache for CodeLens results to improve performance
+type CodeLensCache = {
+  version: number;
+  lenses: vscode.CodeLens[];
+};
+
+class MibCodeLensProvider implements vscode.CodeLensProvider {
+  private cache = new Map<string, CodeLensCache>();
+  private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
+  public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+
+  // Clear cache and refresh when configuration changes
+  public refresh(): void {
+    this.cache.clear();
+    this._onDidChangeCodeLenses.fire();
+  }
+
+  async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
+    const codeLenses: vscode.CodeLens[] = [];
+
+    if (!isFeatureEnabledForDocument(document)) {
+      return codeLenses;
+    }
+    
+    // Check if feature is enabled
+    const config = vscode.workspace.getConfiguration("scos2000MibHover");
+    const showDescriptions = config.get<boolean>("showDescriptions", true);
+    
+    if (!showDescriptions) {
+      return codeLenses;
+    }
+
+    // Check cache first (based on document URI + version)
+    const cacheKey = document.uri.toString();
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.version === document.version) {
+      return cached.lenses;
+    }
+
+    // Check if this document is visible - only process visible documents for performance
+    const visibleEditor = vscode.window.visibleTextEditors.find(
+      editor => editor.document.uri.toString() === document.uri.toString()
+    );
+
+    if (!visibleEditor) {
+      // Document not visible, return cached or empty
+      return cached?.lenses ?? codeLenses;
+    }
+    
+    const index = await loadMibIndex(200);
+    
+    if (!index) {
+      return codeLenses;
+    }
+
+    // Only process visible ranges for performance with large documents
+    const visibleRanges = visibleEditor.visibleRanges;
+    const linesToProcess = new Set<number>();
+    
+    for (const range of visibleRanges) {
+      for (let i = range.start.line; i <= range.end.line && i < document.lineCount; i++) {
+        linesToProcess.add(i);
+      }
+    }
+
+    for (const i of linesToProcess) {
+      const line = document.lineAt(i);
+      const text = line.text.trim();
+      
+      if (!text || text.startsWith("#")) {
+        continue;
+      }
+
+      // Match TC identifiers (S2KTC followed by 3+ digits for performance)
+      const tcMatch = text.match(/\b(S2KTC\d{3,})\b/);
+      if (tcMatch) {
+        const tcId = tcMatch[1];
+        const entry = findEntryCaseInsensitive(index, tcId);
+        
+        if (entry && entry.description) {
+          const range = new vscode.Range(i, 0, i, 0);
+          const codeLens = new vscode.CodeLens(range);
+          codeLens.command = {
+            title: `${entry.description}`,
+            command: "",
+          };
+          codeLenses.push(codeLens);
+        }
+      }
+
+      // Match TM parameter identifiers (3 letters + 5 digits)
+      const tmMatch = text.match(/\b([A-Z]{3}\d{5})\b/);
+      if (tmMatch) {
+        const paramId = tmMatch[1];
+        const pcfEntry = index.pcfByParamId.get(paramId);
+        
+        if (pcfEntry && pcfEntry.name) {
+          const range = new vscode.Range(i, 0, i, 0);
+          const codeLens = new vscode.CodeLens(range);
+          codeLens.command = {
+            title: `${pcfEntry.name}`,
+            command: "",
+          };
+          codeLenses.push(codeLens);
+        }
+      }
+
+      // Match TM packet/SID identifiers (5 digits)
+      const sidMatch = text.match(/\b(\d{5})\b/);
+      if (sidMatch && !tmMatch) { // Don't double-match param IDs
+        const sid = sidMatch[1];
+        const tmEntry = index.telemetryBySid.get(sid);
+        
+        if (tmEntry && tmEntry.description) {
+          const range = new vscode.Range(i, 0, i, 0);
+          const codeLens = new vscode.CodeLens(range);
+          codeLens.command = {
+            title: `${tmEntry.description}`,
+            command: "",
+          };
+          codeLenses.push(codeLens);
+        }
+      }
+    }
+
+    // Cache the results
+    this.cache.set(cacheKey, {
+      version: document.version,
+      lenses: codeLenses
+    });
+
+    return codeLenses;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const hoverProvider = vscode.languages.registerHoverProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
     {
       async provideHover(document: vscode.TextDocument, position: vscode.Position) {
+        if (!isFeatureEnabledForDocument(document)) {
+          return undefined;
+        }
+
         const wordRange = document.getWordRangeAtPosition(position, /[A-Za-z0-9_\-]+/);
         if (!wordRange) {
           return undefined;
@@ -368,7 +652,64 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const index = await loadMibIndex(maxFiles);
         
-        // First, try to find as a parameter in any TC
+        // First, try to find as a telemetry parameter
+        if (index) {
+          // Look up in PCF (telemetry parameter catalog)
+          const pcfEntry = index.pcfByParamId.get(token);
+          if (pcfEntry) {
+            // Find which packets contain this parameter
+            const containingPackets: Array<{sid: string; entry: TelemetryEntry}> = [];
+            for (const [sid, tmEntry] of index.telemetryBySid.entries()) {
+              const hasParam = tmEntry.params.some(p => p.paramId === token);
+              if (hasParam) {
+                containingPackets.push({sid, entry: tmEntry});
+              }
+            }
+            
+            if (containingPackets.length > 0) {
+              const md = new vscode.MarkdownString();
+              md.appendMarkdown(`**Telemetry Parameter** \`${token}\`\n\n`);
+              
+              if (pcfEntry.name) {
+                md.appendMarkdown(`**Name:** ${pcfEntry.name}\n\n`);
+              }
+              
+              md.appendMarkdown(`**Found in ${containingPackets.length} packet(s):**\n`);
+              for (const packet of containingPackets) {
+                const desc = packet.entry.description ? ` — ${packet.entry.description}` : "";
+                md.appendMarkdown(`- \`${packet.sid}\`${desc}\n`);
+              }
+              md.appendMarkdown(`\n`);
+              
+              // Show TXP enum values if available
+              if (pcfEntry.enumSetId) {
+                const enumValues: string[] = [];
+                for (const [sid, tmEntry] of index.telemetryBySid.entries()) {
+                  const param = tmEntry.params.find(p => p.paramId === token);
+                  if (param?.enumerations) {
+                    enumValues.push(...param.enumerations);
+                  }
+                }
+                const uniqueEnums = Array.from(new Set(enumValues));
+                if (uniqueEnums.length > 0) {
+                  md.appendMarkdown(`**Enumeration Values** (from TXP)\n`);
+                  for (const enumVal of uniqueEnums.slice(0, 10)) {
+                    md.appendMarkdown(`- \`${enumVal}\`\n`);
+                  }
+                  if (uniqueEnums.length > 10) {
+                    md.appendMarkdown(`- _(+${uniqueEnums.length - 10} more)_\n`);
+                  }
+                  md.appendMarkdown(`\n`);
+                }
+              }
+              
+              md.isTrusted = false;
+              return new vscode.Hover(md, wordRange);
+            }
+          }
+        }
+        
+        // Second, try to find as a parameter in any TC
         if (index) {
           for (const tcEntry of index.tcById.values()) {
             const paramMatch = tcEntry.params.find(p => 
@@ -608,6 +949,19 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const reverseSearch = vscode.commands.registerCommand("scos2000MibHover.reverseSearch", async () => {
     const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage("Open a target editor first.");
+      return;
+    }
+
+    if (!isFeatureEnabledForDocument(editor.document)) {
+      const configured = getEnabledFileTokens().join(", ");
+      vscode.window.showInformationMessage(
+        `SCOS-2000 MIB features are disabled for this file type. Enabled types: ${configured}`
+      );
+      return;
+    }
+
     const selectionText = editor?.document.getText(editor.selection).trim();
     const token = selectionText && selectionText.length > 0 ? selectionText : undefined;
 
@@ -621,6 +975,33 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(hoverProvider);
   context.subscriptions.push(reverseSearch);
 
+  // CodeLens provider with caching and performance optimizations
+  const codeLensProviderInstance = new MibCodeLensProvider();
+  const codeLensProvider = vscode.languages.registerCodeLensProvider(
+    [{ language: "plaintext" }, { language: "tcl" }],
+    codeLensProviderInstance
+  );
+  context.subscriptions.push(codeLensProvider);
+
+  // Refresh CodeLens when configuration changes
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration("scos2000MibHover.showDescriptions") ||
+        e.affectsConfiguration("scos2000MibHover.enabledFileExtensions")
+      ) {
+        codeLensProviderInstance.refresh();
+      }
+    })
+  );
+
+  // Refresh CodeLens when visible text editors change (e.g., switching tabs)
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors(() => {
+      codeLensProviderInstance.refresh();
+    })
+  );
+
   const completionProvider = vscode.languages.registerCompletionItemProvider(
     [{ language: "plaintext" }, { language: "tcl" }],
     {
@@ -630,6 +1011,10 @@ export function activate(context: vscode.ExtensionContext): void {
         _token: vscode.CancellationToken,
         context: vscode.CompletionContext
       ) {
+        if (!isFeatureEnabledForDocument(document)) {
+          return undefined;
+        }
+
         const wordRange = document.getWordRangeAtPosition(position, /[A-Za-z0-9_\-]+/);
         const wordPrefix = wordRange ? document.getText(wordRange) : "";
 
@@ -649,6 +1034,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const paramPrefix = paramPrefixMatch ? paramPrefixMatch[1] : "";
         const loweredParamPrefix = paramPrefix.toLowerCase();
         const tcEntry = findTelecommandOnLine(lineText, index);
+        const valueContext = getParamValueContext(linePrefix);
         console.log("Autocomplete: lineText=", lineText, "tcEntry=", tcEntry?.id, "wordPrefix=", wordPrefix, "paramPrefix=", paramPrefix);
 
         const triggeredBySpace = context.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter
@@ -656,6 +1042,43 @@ export function activate(context: vscode.ExtensionContext): void {
 
         // Offer OPTIONAL parameter completion if we found a TC on this line
         if (tcEntry) {
+          // If editing a parameter value, prioritize enum value completion for that parameter.
+          if (valueContext) {
+            const { paramId, valuePrefix } = valueContext;
+            const loweredValuePrefix = valuePrefix.toLowerCase();
+            const activeEditor = vscode.window.activeTextEditor;
+            const activeSelection = activeEditor?.selection;
+            const selectedText =
+              activeEditor && activeSelection && !activeSelection.isEmpty
+                ? activeEditor.document.getText(activeSelection)
+                : "";
+            const useFullEnumList =
+              !!activeEditor &&
+              activeEditor.document.uri.toString() === document.uri.toString() &&
+              !!activeSelection &&
+              !activeSelection.isEmpty &&
+              activeSelection.start.line === position.line &&
+              shouldShowFullEnumList(selectedText, valuePrefix);
+            const param = tcEntry.params.find((p) => (p.paramId || p.name) === paramId);
+
+            if (param?.enumerations && param.enumerations.length > 0) {
+              const enumItems: vscode.CompletionItem[] = [];
+              for (const enumValue of param.enumerations) {
+                if (useFullEnumList || !loweredValuePrefix || enumValue.toLowerCase().startsWith(loweredValuePrefix)) {
+                  const enumItem = new vscode.CompletionItem(enumValue, vscode.CompletionItemKind.EnumMember);
+                  enumItem.insertText = enumValue;
+                  enumItem.detail = `${paramId} value`;
+                  enumItem.sortText = `0_${enumValue}`;
+                  enumItems.push(enumItem);
+                }
+              }
+
+              if (enumItems.length > 0) {
+                return enumItems;
+              }
+            }
+          }
+
           const unique = getAvailableOptionalParamIds(tcEntry, lineText);
           for (const id of unique) {
             if (!paramPrefix || id.toLowerCase().startsWith(loweredParamPrefix)) {
@@ -696,6 +1119,12 @@ export function activate(context: vscode.ExtensionContext): void {
         // If this invocation came specifically from a space trigger and we didn't match a TC line,
         // do not spam global TC suggestions.
         if (triggeredBySpace && !tcEntry) {
+          return undefined;
+        }
+
+        // Performance optimization: require at least 3 characters before showing TC suggestions
+        // when there are many TCs (thousands)
+        if (wordPrefix.length > 0 && wordPrefix.length < 3) {
           return undefined;
         }
 
@@ -785,11 +1214,20 @@ export function activate(context: vscode.ExtensionContext): void {
   const enumValueAutoSuggest = vscode.window.onDidChangeTextEditorSelection(async (event) => {
     const editor = event.textEditor;
     const selection = editor.selection;
-    if (!selection.isEmpty) {
+    const allowSelectionTrigger =
+      !selection.isEmpty &&
+      selection.start.line === selection.end.line &&
+      /^[A-Za-z0-9_]+$/.test(editor.document.getText(selection));
+
+    if (!selection.isEmpty && !allowSelectionTrigger) {
       return;
     }
 
     const document = editor.document;
+    if (!isFeatureEnabledForDocument(document)) {
+      return;
+    }
+
     if (document.languageId !== "tcl" && document.languageId !== "plaintext") {
       return;
     }
@@ -798,20 +1236,12 @@ export function activate(context: vscode.ExtensionContext): void {
     const lineText = document.lineAt(position.line).text;
     const linePrefix = lineText.slice(0, position.character);
 
-    const lastOpenBrace = linePrefix.lastIndexOf("{");
-    const lastCloseBrace = linePrefix.lastIndexOf("}");
-    if (lastOpenBrace <= lastCloseBrace) {
+    const valueContext = getParamValueContext(linePrefix);
+    if (!valueContext) {
       return;
     }
 
-    const inside = linePrefix.slice(lastOpenBrace + 1);
-    const insideTrim = inside.trimStart();
-    const match = insideTrim.match(/^([A-Za-z0-9_]+)\s+([A-Za-z0-9_]*)$/);
-    if (!match) {
-      return;
-    }
-
-    const paramId = match[1];
+    const paramId = valueContext.paramId;
     if (!paramId) {
       return;
     }

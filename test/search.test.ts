@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { buildEntrySearchIndex, rankEntries } from "../src/search";
+import { buildEntrySearchIndex, normalizeCompletionToken, rankEntries, shouldShowFullEnumList } from "../src/search";
 import { TcEntry } from "../src/mibParser";
 
 function makeEntry(options: Partial<TcEntry> & { id: string }): TcEntry {
@@ -55,5 +55,23 @@ describe("Search ranking", () => {
 
     assert.strictEqual(ranked[0].entry.id, "TC_B");
     assert.strictEqual(ranked[0].score, 1);
+  });
+
+  it("normalizes selected completion tokens with punctuation", () => {
+    assert.strictEqual(normalizeCompletionToken("FORWARD}"), "FORWARD");
+    assert.strictEqual(normalizeCompletionToken("{BACKWARD"), "BACKWARD");
+    assert.strictEqual(normalizeCompletionToken("  MODE_1  "), "MODE_1");
+  });
+
+  it("shows full enum list when selected token matches current value prefix", () => {
+    assert.strictEqual(shouldShowFullEnumList("FORWARD", "FORWARD"), true);
+    assert.strictEqual(shouldShowFullEnumList("FORWARD}", "FORWARD"), true);
+    assert.strictEqual(shouldShowFullEnumList("{FORWARD", "FORWARD"), true);
+  });
+
+  it("does not show full enum list for mismatched or empty selection", () => {
+    assert.strictEqual(shouldShowFullEnumList("BACKWARD", "FORWARD"), false);
+    assert.strictEqual(shouldShowFullEnumList(undefined, "FORWARD"), false);
+    assert.strictEqual(shouldShowFullEnumList("", "FORWARD"), false);
   });
 });
