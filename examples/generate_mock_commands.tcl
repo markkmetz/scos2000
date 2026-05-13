@@ -143,7 +143,8 @@ proc build_command_index {mib_dir} {
     set param_id [lindex $cols 6]
     set preferred_name $param_name
     set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
-    if {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]} {
+    set should_use_cpc_name [expr {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]}]
+    if {$should_use_cpc_name} {
       set preferred_name [dict get $cpc_names $param_id]
     }
 
@@ -214,9 +215,9 @@ proc render_mock_file {commands out_file} {
         set arg_param_label "param$index"
       }
 
-      set raw_param_label $payload_param_name
-      if {[string trim $raw_param_label] eq ""} {
-        set raw_param_label $arg_param_label
+      set payload_label $payload_param_name
+      if {[string trim $payload_label] eq ""} {
+        set payload_label $arg_param_label
       }
 
       set arg_name [sanitize_identifier $arg_param_label "param$index"]
@@ -233,7 +234,7 @@ proc render_mock_file {commands out_file} {
       set bit_length [dict get $param bit_length]
 
       set param_spec [dict create \
-        raw $raw_param_label \
+        raw $payload_label \
         arg $unique_arg_name \
         display $display_name \
         kind $kind \
