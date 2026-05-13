@@ -36,22 +36,24 @@ proc TC_2_3_S2KTC004 {Output_Line_ID Pulse_Duration} {
     return $payload
 }
 
-proc TC_3_1 {Housekeeping_SID N_HK_Parameters HK_Parameter_ID} {
+proc TC_3_1 {Housekeeping_SID {HK_Parameter_ID {}}} {
     # S2KTC005: Define New Housekeeping Parameter Report
     set payload [list S2KTC005]
+    set N_HK_Parameters [llength $HK_Parameter_ID]
     lappend payload [list {S2KCP013} $Housekeeping_SID]
     lappend payload [list {S2KCP015} $N_HK_Parameters]
-    lappend payload [list {S2KCP016} $HK_Parameter_ID]
+    foreach value $HK_Parameter_ID { lappend payload [list {S2KCP016} $value] }
     return $payload
 }
 
-proc TC_3_2 {Diagnostic_SID Data_Field_Length N_Diag_Parameters Diag_Parameter_ID} {
+proc TC_3_2 {Diagnostic_SID Data_Field_Length {Diag_Parameter_ID {}}} {
     # S2KTC006: Define New Diagnostic Parameter Report
     set payload [list S2KTC006]
+    set N_Diag_Parameters [llength $Diag_Parameter_ID]
     lappend payload [list {S2KCP014} $Diagnostic_SID]
     lappend payload [list {S2KCP017} $Data_Field_Length]
     lappend payload [list {S2KCP018} $N_Diag_Parameters]
-    lappend payload [list {S2KCP019} $Diag_Parameter_ID]
+    foreach value $Diag_Parameter_ID { lappend payload [list {S2KCP019} $value] }
     return $payload
 }
 
@@ -139,21 +141,23 @@ proc TC_3_18 {Diagnostic_SID} {
     return $payload
 }
 
-proc TC_3_19 {Housekeeping_SID N_HK_Parameters HK_Parameter_ID} {
+proc TC_3_19 {Housekeeping_SID {HK_Parameter_ID {}}} {
     # S2KTC019: Select Filtered Housekeeping Parameter Report Generation Mode
     set payload [list S2KTC019]
+    set N_HK_Parameters [llength $HK_Parameter_ID]
     lappend payload [list {S2KCP013} $Housekeeping_SID]
     lappend payload [list {S2KCP015} $N_HK_Parameters]
-    lappend payload [list {S2KCP016} $HK_Parameter_ID]
+    foreach value $HK_Parameter_ID { lappend payload [list {S2KCP016} $value] }
     return $payload
 }
 
-proc TC_3_20 {Diagnostic_SID N_Diag_Parameters Diag_Parameter_ID} {
+proc TC_3_20 {Diagnostic_SID {Diag_Parameter_ID {}}} {
     # S2KTC020: Select Filtered Diagnostic Parameter Report Generation Mode
     set payload [list S2KTC020]
+    set N_Diag_Parameters [llength $Diag_Parameter_ID]
     lappend payload [list {S2KCP014} $Diagnostic_SID]
     lappend payload [list {S2KCP018} $N_Diag_Parameters]
-    lappend payload [list {S2KCP019} $Diag_Parameter_ID]
+    foreach value $Diag_Parameter_ID { lappend payload [list {S2KCP019} $value] }
     return $payload
 }
 
@@ -372,14 +376,15 @@ proc TC_11_6 {Range Time_Tag_1 Time_Tag_2 Sub_schedule_ID APID} {
     return $payload
 }
 
-proc TC_11_7 {Time_Offset APID Sequence_Count Number_of_Commands Time_Offset_2 Time_Offset_3 Time_Offset_4 Time_Offset_5 {Filler {}}} {
+proc TC_11_7 {Time_Offset APID Sequence_Count {Time_Offset_2 {}} Time_Offset_3 Time_Offset_4 Time_Offset_5 {Filler {}}} {
     # S2KTC047: Time-Shift Selected Telecommands
     set payload [list S2KTC047]
+    set Number_of_Commands [llength $Time_Offset_2]
     lappend payload [list {S2KCP046} $Time_Offset]
     lappend payload [list {S2KCP040} $APID]
     lappend payload [list {S2KCP042} $Sequence_Count]
     lappend payload [list {S2KCP047} $Number_of_Commands]
-    lappend payload [list {S2KCP312} $Time_Offset_2]
+    foreach value $Time_Offset_2 { lappend payload [list {S2KCP312} $value] }
     lappend payload [list {S2KCP315} $Time_Offset_3]
     lappend payload [list {S2KCP316} $Time_Offset_4]
     lappend payload [list {S2KCP317} $Time_Offset_5]
@@ -472,19 +477,21 @@ proc TC_11_18 {} {
     return $payload
 }
 
-proc TC_12_1 {N Monitoring_ID} {
+proc TC_12_1 {{Monitoring_ID {}}} {
     # S2KTC057: Enable Monitoring Of Parameters
     set payload [list S2KTC057]
+    set N [llength $Monitoring_ID]
     lappend payload [list {S2KCP048} $N]
-    lappend payload [list {S2KCP049} $Monitoring_ID]
+    foreach value $Monitoring_ID { lappend payload [list {S2KCP049} $value] }
     return $payload
 }
 
-proc TC_12_2 {N Monitoring_ID} {
+proc TC_12_2 {{Monitoring_ID {}}} {
     # S2KTC058: Disable Monitoring Of Parameters
     set payload [list S2KTC058]
+    set N [llength $Monitoring_ID]
     lappend payload [list {S2KCP048} $N]
-    lappend payload [list {S2KCP049} $Monitoring_ID]
+    foreach value $Monitoring_ID { lappend payload [list {S2KCP049} $value] }
     return $payload
 }
 
@@ -550,11 +557,12 @@ proc TC_13_5 {Sequence_Number} {
     return $payload
 }
 
-proc TC_13_6 {N Sequence_Number} {
+proc TC_13_6 {{Sequence_Number {}}} {
     # S2KTC067: Repeat Parts
     set payload [list S2KTC067]
+    set N [llength $Sequence_Number]
     lappend payload [list {S2KCP057} $N]
-    lappend payload [list {S2KCP056} $Sequence_Number]
+    foreach value $Sequence_Number { lappend payload [list {S2KCP056} $value] }
     return $payload
 }
 
@@ -636,21 +644,25 @@ proc TC_14_3 {} {
     return $payload
 }
 
-proc TC_14_5 {N PID SID} {
+proc TC_14_5 {{PID {}} {SID {}}} {
     # S2KTC077: Enable Forwarding Of Housekeeping Packets
     set payload [list S2KTC077]
+    set N [llength $PID]
+    if {[llength $SID] != $N} { error "SID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP067} $SID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $SID { lappend payload [list {S2KCP067} $value] }
     return $payload
 }
 
-proc TC_14_6 {N PID SID} {
+proc TC_14_6 {{PID {}} {SID {}}} {
     # S2KTC078: Disable Forwarding Of Housekeeping Packets
     set payload [list S2KTC078]
+    set N [llength $PID]
+    if {[llength $SID] != $N} { error "SID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP067} $SID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $SID { lappend payload [list {S2KCP067} $value] }
     return $payload
 }
 
@@ -660,21 +672,25 @@ proc TC_14_7 {} {
     return $payload
 }
 
-proc TC_14_9 {N PID SID} {
+proc TC_14_9 {{PID {}} {SID {}}} {
     # S2KTC080: Enable Forwarding Of Diagnostic Packets
     set payload [list S2KTC080]
+    set N [llength $PID]
+    if {[llength $SID] != $N} { error "SID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP067} $SID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $SID { lappend payload [list {S2KCP067} $value] }
     return $payload
 }
 
-proc TC_14_10 {N PID SID} {
+proc TC_14_10 {{PID {}} {SID {}}} {
     # S2KTC081: Disable Forwarding Of Diagnostic Packets
     set payload [list S2KTC081]
+    set N [llength $PID]
+    if {[llength $SID] != $N} { error "SID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP067} $SID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $SID { lappend payload [list {S2KCP067} $value] }
     return $payload
 }
 
@@ -684,21 +700,25 @@ proc TC_14_11 {} {
     return $payload
 }
 
-proc TC_14_13 {N PID Event_ID} {
+proc TC_14_13 {{PID {}} {Event_ID {}}} {
     # S2KTC083: Enable Forwarding Of Event Report Packets
     set payload [list S2KTC083]
+    set N [llength $PID]
+    if {[llength $Event_ID] != $N} { error "Event_ID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP068} $Event_ID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $Event_ID { lappend payload [list {S2KCP068} $value] }
     return $payload
 }
 
-proc TC_14_14 {N PID Event_ID} {
+proc TC_14_14 {{PID {}} {Event_ID {}}} {
     # S2KTC084: Disable Forwarding Of Event Report Packets
     set payload [list S2KTC084]
+    set N [llength $PID]
+    if {[llength $Event_ID] != $N} { error "Event_ID must have the same item count as PID" }
     lappend payload [list {S2KCP065} $N]
-    lappend payload [list {S2KCP066} $PID]
-    lappend payload [list {S2KCP068} $Event_ID]
+    foreach value $PID { lappend payload [list {S2KCP066} $value] }
+    foreach value $Event_ID { lappend payload [list {S2KCP068} $value] }
     return $payload
 }
 
@@ -845,13 +865,15 @@ proc TC_18_6 {Procedure_ID} {
     return $payload
 }
 
-proc TC_18_7 {Procedure_ID N Parameter_ID Value} {
+proc TC_18_7 {Procedure_ID {Parameter_ID {}} {Value {}}} {
     # S2KTC103: Communicate Parameters To A Procedure
     set payload [list S2KTC103]
+    set N [llength $Parameter_ID]
+    if {[llength $Value] != $N} { error "Value must have the same item count as Parameter_ID" }
     lappend payload [list {S2KCP080} $Procedure_ID]
     lappend payload [list {S2KCP083} $N]
-    lappend payload [list {S2KCP084} $Parameter_ID]
-    lappend payload [list {S2KCP085} $Value]
+    foreach value $Parameter_ID { lappend payload [list {S2KCP084} $value] }
+    foreach value $Value { lappend payload [list {S2KCP085} $value] }
     return $payload
 }
 

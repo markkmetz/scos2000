@@ -91,9 +91,9 @@ proc is_count_param_name {name} {
   return 0
 }
 
-proc build_cpc_name_index {mib_dir} {
+proc build_cpc_index {mib_dir} {
   set cpc_path [find_mib_file $mib_dir "cpc.dat"]
-  set names [dict create]
+  set cpc_index [dict create]
 
   foreach line [read_lines $cpc_path] {
     set trimmed [string trim $line]
@@ -104,21 +104,24 @@ proc build_cpc_name_index {mib_dir} {
     set cols [split_dat_line $line]
     set param_id [lindex $cols 0]
     set param_name [lindex $cols 1]
+    set cpc_categ [lindex $cols 7]
 
     if {[string trim $param_id] eq "" || [string trim $param_name] eq ""} {
       continue
     }
 
-    dict set names $param_id $param_name
+    dict set cpc_index $param_id [dict create \
+      name $param_name \
+      categ $cpc_categ]
   }
 
-  return $names
+  return $cpc_index
 }
 
 proc build_command_index {mib_dir} {
   set ccf_path [find_mib_file $mib_dir "ccf.dat"]
   set cdf_path [find_mib_file $mib_dir "cdf.dat"]
-  set cpc_names [build_cpc_name_index $mib_dir]
+  set cpc_index [build_cpc_index $mib_dir]
 
   set commands [dict create]
 
@@ -160,9 +163,13 @@ proc build_command_index {mib_dir} {
     set param_id [lindex $cols 6]
     set preferred_name $param_name
     set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
-    set should_use_cpc_name [expr {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]}]
+    set should_use_cpc_name [expr {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_index $param_id]}]
     if {$should_use_cpc_name} {
-      set preferred_name [dict get $cpc_names $param_id]
+      set preferred_name [dict get $cpc_index $param_id name]
+    }
+    set cpc_categ ""
+    if {[string trim $param_id] ne "" && [dict exists $cpc_index $param_id]} {
+      set cpc_categ [dict get $cpc_index $param_id categ]
     }
 
     set param [dict create \
@@ -171,6 +178,8 @@ proc build_command_index {mib_dir} {
       preferred_name $preferred_name \
       payload_name $param_id \
       bit_length [lindex $cols 3] \
+      group_size [lindex $cols 5] \
+      cpc_categ $cpc_categ \
       param_id $param_id]
 
     set entry [dict get $commands $tc_id]
@@ -255,6 +264,8 @@ proc render_mock_file {commands out_file} {
         arg $unique_arg_name \
         display $display_name \
         kind $kind \
+        group_size [dict get $param group_size] \
+        cpc_categ [dict get $param cpc_categ] \
         bit_length $bit_length]
 
       if {[is_variable_length_param $bit_length]} {
@@ -270,7 +281,51 @@ proc render_mock_file {commands out_file} {
 
     set arg_spec {}
     set auto_count_param_arg ""
+    set auto_count_param_args [dict create]
+    set list_group_param_args [dict create]
+    set count_list_relations {}
     set single_variable_param {}
+    set required_count [llength $required_params]
+    for {set i 0} {$i < $required_count} {incr i} {
+      set count_param [lindex $required_params $i]
+      set cpc_categ [string toupper [string trim [dict get $count_param cpc_categ]]]
+      if {$cpc_categ ne "N"} {
+        continue
+      }
+      set count_display [dict get $count_param display]
+      set count_arg_name [dict get $count_param arg]
+      if {![is_count_param_name $count_display] && ![is_count_param_name $count_arg_name]} {
+        continue
+      }
+
+      set raw_group_size [string trim [dict get $count_param group_size]]
+      set group_size 1
+      if {[string is integer -strict $raw_group_size] && $raw_group_size > 0} {
+        set group_size $raw_group_size
+      }
+      if {$i + $group_size >= $required_count} {
+        continue
+      }
+
+      set group_params {}
+      for {set j 1} {$j <= $group_size} {incr j} {
+        lappend group_params [lindex $required_params [expr {$i + $j}]]
+      }
+
+      set relation [dict create \
+        count_arg [dict get $count_param arg] \
+        group_params $group_params]
+      lappend count_list_relations $relation
+    }
+
+    foreach relation $count_list_relations {
+      set count_arg [dict get $relation count_arg]
+      dict set auto_count_param_args $count_arg 1
+      foreach param_spec [dict get $relation group_params] {
+        dict set list_group_param_args [dict get $param_spec arg] 1
+      }
+    }
+
     if {[llength $variable_params] == 1} {
       set single_variable_param [lindex $variable_params 0]
       if {[llength $required_params] > 0} {
@@ -282,10 +337,17 @@ proc render_mock_file {commands out_file} {
         }
       }
     }
+    if {$auto_count_param_arg ne ""} {
+      dict set auto_count_param_args $auto_count_param_arg 1
+    }
 
     foreach param_spec $required_params {
       set arg_name [dict get $param_spec arg]
-      if {$arg_name eq $auto_count_param_arg} {
+      if {[dict exists $auto_count_param_args $arg_name]} {
+        continue
+      }
+      if {[dict exists $list_group_param_args $arg_name]} {
+        lappend arg_spec [list $arg_name {}]
         continue
       }
       lappend arg_spec $arg_name
@@ -305,6 +367,16 @@ proc render_mock_file {commands out_file} {
     puts $channel "proc $proc_name {$arg_spec_text} {"
     puts $channel "    # $tc_id: [dict get $entry description]"
     puts $channel [format {    set payload [list %s]} $tc_id]
+    foreach relation $count_list_relations {
+      set count_arg [dict get $relation count_arg]
+      set group_params [dict get $relation group_params]
+      set first_group_arg [dict get [lindex $group_params 0] arg]
+      puts $channel [format {    set %s [llength $%s]} $count_arg $first_group_arg]
+      foreach param_spec [lrange $group_params 1 end] {
+        set other_group_arg [dict get $param_spec arg]
+        puts $channel [format {    if {[llength $%s] != $%s} { error "%s must have the same item count as %s" }} $other_group_arg $count_arg $other_group_arg $first_group_arg]
+      }
+    }
     if {$auto_count_param_arg ne ""} {
       set variable_list_arg [dict get $single_variable_param arg]
       puts $channel [format {    set %s [llength $%s]} $auto_count_param_arg $variable_list_arg]
@@ -313,7 +385,11 @@ proc render_mock_file {commands out_file} {
     foreach param_spec $required_params {
       set raw [dict get $param_spec raw]
       set arg [dict get $param_spec arg]
-      puts $channel [format {    lappend payload [list {%s} $%s]} $raw $arg]
+      if {[dict exists $list_group_param_args $arg]} {
+        puts $channel [format {    foreach value $%s { lappend payload [list {%s} $value] }} $arg $raw]
+      } else {
+        puts $channel [format {    lappend payload [list {%s} $%s]} $raw $arg]
+      }
     }
 
     foreach param_spec $optional_params {

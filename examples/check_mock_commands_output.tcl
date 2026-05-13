@@ -14,12 +14,29 @@ if {![file exists $mock_file]} {
 source $mock_file
 
 proc required_call_args {proc_name} {
+  set proc_args [info args $proc_name]
   set args {}
-  foreach arg [info args $proc_name] {
+  set total [llength $proc_args]
+  for {set i 0} {$i < $total} {incr i} {
+    set arg [lindex $proc_args $i]
     if {$arg eq "args"} {
       continue
     }
     if {[info default $proc_name $arg _default]} {
+      set has_later_required 0
+      for {set j [expr {$i + 1}]} {$j < $total} {incr j} {
+        set later_arg [lindex $proc_args $j]
+        if {$later_arg eq "args"} {
+          continue
+        }
+        if {![info default $proc_name $later_arg _later_default]} {
+          set has_later_required 1
+          break
+        }
+      }
+      if {$has_later_required} {
+        lappend args ""
+      }
       continue
     }
     lappend args "${arg}_VALUE"
@@ -34,6 +51,16 @@ proc payload_value {payload label} {
     }
   }
   return "__MISSING__"
+}
+
+proc payload_values {payload label} {
+  set values {}
+  foreach param_entry [lrange $payload 1 end] {
+    if {[lindex $param_entry 0] eq $label} {
+      lappend values [lindex $param_entry 1]
+    }
+  }
+  return $values
 }
 
 set all_procs [lsort [info procs]]
@@ -105,6 +132,40 @@ if {[llength [info procs TC_6_2]] > 0} {
     if {$count_value != $expected_count || [llength $words_value] != $expected_count} {
       lappend auto_count_failures [list TC_6_2 "Expected S2KCP031=$expected_count and $expected_count words, got S2KCP031=$count_value words=$words_value"]
     }
+  }
+}
+
+if {[llength [info procs TC_3_1]] > 0} {
+  set hk_ids [list PID_A PID_B]
+  set expected_count [llength $hk_ids]
+  if {[catch {set payload [TC_3_1 HK_SID_1 $hk_ids]} err]} {
+    lappend auto_count_failures [list TC_3_1 $err]
+  } else {
+    set count_value [payload_value $payload S2KCP015]
+    set id_values [payload_values $payload S2KCP016]
+    if {$count_value != $expected_count || [llength $id_values] != $expected_count} {
+      lappend auto_count_failures [list TC_3_1 "Expected S2KCP015=$expected_count and $expected_count S2KCP016 values, got S2KCP015=$count_value values=$id_values"]
+    }
+  }
+}
+
+if {[llength [info procs TC_14_5]] > 0} {
+  set pid_values [list 1 2]
+  set sid_values [list 11 12]
+  set expected_count [llength $pid_values]
+  if {[catch {set payload [TC_14_5 $pid_values $sid_values]} err]} {
+    lappend auto_count_failures [list TC_14_5 $err]
+  } else {
+    set count_value [payload_value $payload S2KCP065]
+    set payload_pids [payload_values $payload S2KCP066]
+    set payload_sids [payload_values $payload S2KCP067]
+    if {$count_value != $expected_count || [llength $payload_pids] != $expected_count || [llength $payload_sids] != $expected_count} {
+      lappend auto_count_failures [list TC_14_5 "Expected S2KCP065=$expected_count and $expected_count PID/SID values, got S2KCP065=$count_value pid=$payload_pids sid=$payload_sids"]
+    }
+  }
+
+  if {![catch {TC_14_5 [list 1 2] [list 11]}]} {
+    lappend auto_count_failures [list TC_14_5 "Expected list-length mismatch to raise an error"]
   }
 }
 
