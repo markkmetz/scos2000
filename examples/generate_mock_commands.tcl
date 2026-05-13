@@ -2,7 +2,7 @@
 
 proc read_lines {path} {
   if {![file exists $path]} {
-    error "Input file does not exist: $path"
+    error "Failed to read MIB file: $path does not exist"
   }
 
   if {[catch {open $path r} channel]} {
@@ -30,7 +30,7 @@ proc find_mib_file {mib_dir filename} {
       return $path
     }
   }
-  error "Unable to locate $filename in $mib_dir"
+  error "Unable to locate $filename in $mib_dir. Please verify the file exists and the path is correct."
 }
 
 proc sanitize_identifier {raw fallback} {
@@ -237,6 +237,7 @@ proc render_mock_file {commands out_file} {
       if {[llength $variable_names] == 1} {
         puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} [lindex $variable_names 0]]
       } else {
+        puts $channel "    # Multiple variable-length parameters are encoded as VARARGS:param1,param2,..."
         set variable_key "VARARGS:[join $variable_names ","]"
         puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} $variable_key]
       }
