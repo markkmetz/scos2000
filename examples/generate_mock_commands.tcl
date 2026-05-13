@@ -288,10 +288,6 @@ proc render_mock_file {commands out_file} {
     set required_count [llength $required_params]
     for {set i 0} {$i < $required_count} {incr i} {
       set count_param [lindex $required_params $i]
-      set cpc_categ [string toupper [string trim [dict get $count_param cpc_categ]]]
-      if {$cpc_categ ne "N"} {
-        continue
-      }
       set count_display [dict get $count_param display]
       set count_arg_name [dict get $count_param arg]
       if {![is_count_param_name $count_display] && ![is_count_param_name $count_arg_name]} {
