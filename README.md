@@ -65,6 +65,8 @@ Run:
 ./examples/generate_mock_commands.tcl
 ```
 
+Run from the repository root (or use absolute paths).
+
 Custom input/output:
 
 ```bash
