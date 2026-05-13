@@ -2,8 +2,6 @@
 
 set script_dir [file dirname [file normalize [info script]]]
 set mock_file [file join $script_dir mock_commands.tcl]
-# Generated procs currently use these prefixes in examples/mock_commands.tcl.
-set generated_proc_pattern {^(TC_|SetV_|Parameter_ID|Cmd_ID_)}
 if {[llength $argv] >= 1} {
   set mock_file [lindex $argv 0]
 }
@@ -41,7 +39,8 @@ proc payload_value {payload label} {
 set all_procs [lsort [info procs]]
 set generated_procs {}
 foreach proc_name $all_procs {
-  if {[regexp $generated_proc_pattern $proc_name]} {
+  set body [info body $proc_name]
+  if {[string first "# S2KTC" $body] >= 0} {
     lappend generated_procs $proc_name
   }
 }
@@ -73,7 +72,7 @@ foreach proc_name $generated_procs {
     if {$label eq "" || [string match "VARARGS:*" $label]} {
       continue
     }
-    if {[regexp {^S2KCP[0-9]+$} $label]} {
+    if {[regexp {^S2K[A-Z0-9]+$} $label]} {
       lappend payload_id_labels [list $proc_name $label]
     } else {
       lappend payload_non_id_labels [list $proc_name $label]
@@ -110,8 +109,8 @@ if {[llength [info procs TC_6_2]] > 0} {
 puts "Checked [llength $generated_procs] generated procs from $mock_file"
 puts "Invocation failures: [llength $failed_calls]"
 puts "Non-friendly argument names: [llength $non_friendly_args]"
-puts "Payload labels using S2KCP IDs: [llength $payload_id_labels]"
-puts "Payload labels not using S2KCP IDs: [llength $payload_non_id_labels]"
+puts "Payload labels using non-friendly IDs: [llength $payload_id_labels]"
+puts "Payload labels not using non-friendly IDs: [llength $payload_non_id_labels]"
 puts "Auto-count validation failures: [llength $auto_count_failures]"
 
 if {[llength $failed_calls] > 0} {

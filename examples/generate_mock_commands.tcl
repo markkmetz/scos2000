@@ -293,6 +293,8 @@ proc render_mock_file {commands out_file} {
     foreach param_spec $optional_params {
       lappend arg_spec [list [dict get $param_spec arg] ""]
     }
+    # Single variable-length parameters use one list argument for Tcl-friendly calls.
+    # Multiple variable-length parameters still use args to preserve existing behavior.
     if {[llength $variable_params] == 1} {
       lappend arg_spec [list [dict get $single_variable_param arg] {}]
     } elseif {[llength $variable_params] > 1} {
