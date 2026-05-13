@@ -36,24 +36,22 @@ proc TC_2_3_S2KTC004 {Output_Line_ID Pulse_Duration} {
     return $payload
 }
 
-proc TC_3_1 {Housekeeping_SID {HK_Parameter_ID {}}} {
+proc TC_3_1 {Housekeeping_SID N_HK_Parameters HK_Parameter_ID} {
     # S2KTC005: Define New Housekeeping Parameter Report
     set payload [list S2KTC005]
-    set N_HK_Parameters [llength $HK_Parameter_ID]
     lappend payload [list {S2KCP013} $Housekeeping_SID]
     lappend payload [list {S2KCP015} $N_HK_Parameters]
-    foreach value $HK_Parameter_ID { lappend payload [list {S2KCP016} $value] }
+    lappend payload [list {S2KCP016} $HK_Parameter_ID]
     return $payload
 }
 
-proc TC_3_2 {Diagnostic_SID Data_Field_Length {Diag_Parameter_ID {}}} {
+proc TC_3_2 {Diagnostic_SID Data_Field_Length N_Diag_Parameters Diag_Parameter_ID} {
     # S2KTC006: Define New Diagnostic Parameter Report
     set payload [list S2KTC006]
-    set N_Diag_Parameters [llength $Diag_Parameter_ID]
     lappend payload [list {S2KCP014} $Diagnostic_SID]
     lappend payload [list {S2KCP017} $Data_Field_Length]
     lappend payload [list {S2KCP018} $N_Diag_Parameters]
-    foreach value $Diag_Parameter_ID { lappend payload [list {S2KCP019} $value] }
+    lappend payload [list {S2KCP019} $Diag_Parameter_ID]
     return $payload
 }
 
@@ -141,23 +139,21 @@ proc TC_3_18 {Diagnostic_SID} {
     return $payload
 }
 
-proc TC_3_19 {Housekeeping_SID {HK_Parameter_ID {}}} {
+proc TC_3_19 {Housekeeping_SID N_HK_Parameters HK_Parameter_ID} {
     # S2KTC019: Select Filtered Housekeeping Parameter Report Generation Mode
     set payload [list S2KTC019]
-    set N_HK_Parameters [llength $HK_Parameter_ID]
     lappend payload [list {S2KCP013} $Housekeeping_SID]
     lappend payload [list {S2KCP015} $N_HK_Parameters]
-    foreach value $HK_Parameter_ID { lappend payload [list {S2KCP016} $value] }
+    lappend payload [list {S2KCP016} $HK_Parameter_ID]
     return $payload
 }
 
-proc TC_3_20 {Diagnostic_SID {Diag_Parameter_ID {}}} {
+proc TC_3_20 {Diagnostic_SID N_Diag_Parameters Diag_Parameter_ID} {
     # S2KTC020: Select Filtered Diagnostic Parameter Report Generation Mode
     set payload [list S2KTC020]
-    set N_Diag_Parameters [llength $Diag_Parameter_ID]
     lappend payload [list {S2KCP014} $Diagnostic_SID]
     lappend payload [list {S2KCP018} $N_Diag_Parameters]
-    foreach value $Diag_Parameter_ID { lappend payload [list {S2KCP019} $value] }
+    lappend payload [list {S2KCP019} $Diag_Parameter_ID]
     return $payload
 }
 
@@ -376,15 +372,14 @@ proc TC_11_6 {Range Time_Tag_1 Time_Tag_2 Sub_schedule_ID APID} {
     return $payload
 }
 
-proc TC_11_7 {Time_Offset APID Sequence_Count {Time_Offset_2 {}} Time_Offset_3 Time_Offset_4 Time_Offset_5 {Filler {}}} {
+proc TC_11_7 {Time_Offset APID Sequence_Count Number_of_Commands Time_Offset_2 Time_Offset_3 Time_Offset_4 Time_Offset_5 {Filler {}}} {
     # S2KTC047: Time-Shift Selected Telecommands
     set payload [list S2KTC047]
-    set Number_of_Commands [llength $Time_Offset_2]
     lappend payload [list {S2KCP046} $Time_Offset]
     lappend payload [list {S2KCP040} $APID]
     lappend payload [list {S2KCP042} $Sequence_Count]
     lappend payload [list {S2KCP047} $Number_of_Commands]
-    foreach value $Time_Offset_2 { lappend payload [list {S2KCP312} $value] }
+    lappend payload [list {S2KCP312} $Time_Offset_2]
     lappend payload [list {S2KCP315} $Time_Offset_3]
     lappend payload [list {S2KCP316} $Time_Offset_4]
     lappend payload [list {S2KCP317} $Time_Offset_5]
@@ -486,12 +481,11 @@ proc TC_12_1 {{Monitoring_ID {}}} {
     return $payload
 }
 
-proc TC_12_2 {{Monitoring_ID {}}} {
+proc TC_12_2 {N Monitoring_ID} {
     # S2KTC058: Disable Monitoring Of Parameters
     set payload [list S2KTC058]
-    set N [llength $Monitoring_ID]
     lappend payload [list {S2KCP048} $N]
-    foreach value $Monitoring_ID { lappend payload [list {S2KCP049} $value] }
+    lappend payload [list {S2KCP049} $Monitoring_ID]
     return $payload
 }
 
@@ -614,27 +608,45 @@ proc TC_13_13 {} {
     return $payload
 }
 
-proc TC_14_1 {N1 APID N2 Type N3 Subtype} {
+proc TC_14_1 {{APID {}} {Type {}} {Subtype {}}} {
     # S2KTC074: Enable Forwarding Of Telemetry Source Packets
     set payload [list S2KTC074]
+    set N1 [llength $APID]
+    if {[llength $N2] != $N1} { error "N2 must have the same item count as APID" }
+    if {[llength $Type] != $N1} { error "Type must have the same item count as APID" }
+    if {[llength $N3] != $N1} { error "N3 must have the same item count as APID" }
+    if {[llength $Subtype] != $N1} { error "Subtype must have the same item count as APID" }
+    set N2 [llength $Type]
+    if {[llength $N3] != $N2} { error "N3 must have the same item count as Type" }
+    if {[llength $Subtype] != $N2} { error "Subtype must have the same item count as Type" }
+    set N3 [llength $Subtype]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP060} $APID]
-    lappend payload [list {S2KCP061} $N2]
-    lappend payload [list {S2KCP062} $Type]
-    lappend payload [list {S2KCP063} $N3]
-    lappend payload [list {S2KCP064} $Subtype]
+    foreach value $APID { lappend payload [list {S2KCP060} $value] }
+    foreach value $N2 { lappend payload [list {S2KCP061} $value] }
+    foreach value $Type { lappend payload [list {S2KCP062} $value] }
+    foreach value $N3 { lappend payload [list {S2KCP063} $value] }
+    foreach value $Subtype { lappend payload [list {S2KCP064} $value] }
     return $payload
 }
 
-proc TC_14_2 {N1 APID N2 Type N3 Subtype} {
+proc TC_14_2 {{APID {}} {Type {}} {Subtype {}}} {
     # S2KTC075: Disable Forwarding Of Telemetry Source Packets
     set payload [list S2KTC075]
+    set N1 [llength $APID]
+    if {[llength $N2] != $N1} { error "N2 must have the same item count as APID" }
+    if {[llength $Type] != $N1} { error "Type must have the same item count as APID" }
+    if {[llength $N3] != $N1} { error "N3 must have the same item count as APID" }
+    if {[llength $Subtype] != $N1} { error "Subtype must have the same item count as APID" }
+    set N2 [llength $Type]
+    if {[llength $N3] != $N2} { error "N3 must have the same item count as Type" }
+    if {[llength $Subtype] != $N2} { error "Subtype must have the same item count as Type" }
+    set N3 [llength $Subtype]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP060} $APID]
-    lappend payload [list {S2KCP061} $N2]
-    lappend payload [list {S2KCP062} $Type]
-    lappend payload [list {S2KCP063} $N3]
-    lappend payload [list {S2KCP064} $Subtype]
+    foreach value $APID { lappend payload [list {S2KCP060} $value] }
+    foreach value $N2 { lappend payload [list {S2KCP061} $value] }
+    foreach value $Type { lappend payload [list {S2KCP062} $value] }
+    foreach value $N3 { lappend payload [list {S2KCP063} $value] }
+    foreach value $Subtype { lappend payload [list {S2KCP064} $value] }
     return $payload
 }
 
@@ -742,27 +754,45 @@ proc TC_15_2 {Store_ID} {
     return $payload
 }
 
-proc TC_15_3 {N1 APID N2 Type N3 Subtype} {
+proc TC_15_3 {{APID {}} {Type {}} {Subtype {}}} {
     # S2KTC088: Add Packets To Storage Selection Definition
     set payload [list S2KTC088]
+    set N1 [llength $APID]
+    if {[llength $N2] != $N1} { error "N2 must have the same item count as APID" }
+    if {[llength $Type] != $N1} { error "Type must have the same item count as APID" }
+    if {[llength $N3] != $N1} { error "N3 must have the same item count as APID" }
+    if {[llength $Subtype] != $N1} { error "Subtype must have the same item count as APID" }
+    set N2 [llength $Type]
+    if {[llength $N3] != $N2} { error "N3 must have the same item count as Type" }
+    if {[llength $Subtype] != $N2} { error "Subtype must have the same item count as Type" }
+    set N3 [llength $Subtype]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP060} $APID]
-    lappend payload [list {S2KCP061} $N2]
-    lappend payload [list {S2KCP062} $Type]
-    lappend payload [list {S2KCP063} $N3]
-    lappend payload [list {S2KCP064} $Subtype]
+    foreach value $APID { lappend payload [list {S2KCP060} $value] }
+    foreach value $N2 { lappend payload [list {S2KCP061} $value] }
+    foreach value $Type { lappend payload [list {S2KCP062} $value] }
+    foreach value $N3 { lappend payload [list {S2KCP063} $value] }
+    foreach value $Subtype { lappend payload [list {S2KCP064} $value] }
     return $payload
 }
 
-proc TC_15_4 {N1 APID N2 Type N3 Subtype} {
+proc TC_15_4 {{APID {}} {Type {}} {Subtype {}}} {
     # S2KTC089: Remove Packets From Storage Selection Definition
     set payload [list S2KTC089]
+    set N1 [llength $APID]
+    if {[llength $N2] != $N1} { error "N2 must have the same item count as APID" }
+    if {[llength $Type] != $N1} { error "Type must have the same item count as APID" }
+    if {[llength $N3] != $N1} { error "N3 must have the same item count as APID" }
+    if {[llength $Subtype] != $N1} { error "Subtype must have the same item count as APID" }
+    set N2 [llength $Type]
+    if {[llength $N3] != $N2} { error "N3 must have the same item count as Type" }
+    if {[llength $Subtype] != $N2} { error "Subtype must have the same item count as Type" }
+    set N3 [llength $Subtype]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP060} $APID]
-    lappend payload [list {S2KCP061} $N2]
-    lappend payload [list {S2KCP062} $Type]
-    lappend payload [list {S2KCP063} $N3]
-    lappend payload [list {S2KCP064} $Subtype]
+    foreach value $APID { lappend payload [list {S2KCP060} $value] }
+    foreach value $N2 { lappend payload [list {S2KCP061} $value] }
+    foreach value $Type { lappend payload [list {S2KCP062} $value] }
+    foreach value $N3 { lappend payload [list {S2KCP063} $value] }
+    foreach value $Subtype { lappend payload [list {S2KCP064} $value] }
     return $payload
 }
 
@@ -1001,19 +1031,21 @@ proc Dynamic_Defaults {Output_Line_ID Pulse_Duration} {
     return $payload
 }
 
-proc Editable_repeated_param {N1 APID} {
+proc Editable_repeated_param {{APID {}}} {
     # S2KTC120: 
     set payload [list S2KTC120]
+    set N1 [llength $APID]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP060} $APID]
+    foreach value $APID { lappend payload [list {S2KCP060} $value] }
     return $payload
 }
 
-proc Very_Large_TC {N1 tc_1byte} {
+proc Very_Large_TC {{tc_1byte {}}} {
     # S2KTC121: 
     set payload [list S2KTC121]
+    set N1 [llength $tc_1byte]
     lappend payload [list {S2KCP059} $N1]
-    lappend payload [list {S2KCP108} $tc_1byte]
+    foreach value $tc_1byte { lappend payload [list {S2KCP108} $value] }
     return $payload
 }
 

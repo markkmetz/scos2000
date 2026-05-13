@@ -160,7 +160,16 @@ proc build_command_index {mib_dir} {
     }
 
     set param_name [lindex $cols 2]
-    set param_id [lindex $cols 6]
+    set raw_col_6 [string trim [lindex $cols 6]]
+    set raw_col_5 [string trim [lindex $cols 5]]
+    set repeat_count ""
+    set param_id $raw_col_6
+    if {[string is integer -strict $raw_col_6] && $raw_col_6 > 0} {
+      set repeat_count $raw_col_6
+      set param_id [string trim [lindex $cols 7]]
+    } elseif {[string is integer -strict $raw_col_5] && $raw_col_5 > 0} {
+      set repeat_count $raw_col_5
+    }
     set preferred_name $param_name
     set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
     set should_use_cpc_name [expr {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_index $param_id]}]
@@ -178,7 +187,7 @@ proc build_command_index {mib_dir} {
       preferred_name $preferred_name \
       payload_name $param_id \
       bit_length [lindex $cols 3] \
-      group_size [lindex $cols 5] \
+      group_size $repeat_count \
       cpc_categ $cpc_categ \
       param_id $param_id]
 
@@ -288,17 +297,11 @@ proc render_mock_file {commands out_file} {
     set required_count [llength $required_params]
     for {set i 0} {$i < $required_count} {incr i} {
       set count_param [lindex $required_params $i]
-      set count_display [dict get $count_param display]
-      set count_arg_name [dict get $count_param arg]
-      if {![is_count_param_name $count_display] && ![is_count_param_name $count_arg_name]} {
+      set raw_group_size [string trim [dict get $count_param group_size]]
+      if {![string is integer -strict $raw_group_size] || $raw_group_size <= 0} {
         continue
       }
-
-      set raw_group_size [string trim [dict get $count_param group_size]]
-      set group_size 1
-      if {[string is integer -strict $raw_group_size] && $raw_group_size > 0} {
-        set group_size $raw_group_size
-      }
+      set group_size $raw_group_size
       if {$i + $group_size >= $required_count} {
         continue
       }
