@@ -225,9 +225,10 @@ proc render_mock_file {commands out_file} {
         lappend variable_names [dict get $param_spec raw]
       }
 
-      set variable_label [join $variable_names ", "]
-      puts $channel "    # Variable-length parameter(s): $variable_label"
-      puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} $variable_label]
+      puts $channel "    # Variable-length parameter(s): [join $variable_names ", "]"
+      foreach variable_name $variable_names {
+        puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} $variable_name]
+      }
     }
 
     puts $channel "    return \$payload"
@@ -239,8 +240,17 @@ proc render_mock_file {commands out_file} {
 }
 
 set script_dir [file dirname [file normalize [info script]]]
-set mib_dir [file normalize [expr {[llength $argv] >= 1 ? [lindex $argv 0] : [file join $script_dir .. mibs ASCII_CSIM]}]]
-set out_file [file normalize [expr {[llength $argv] >= 2 ? [lindex $argv 1] : [file join $script_dir mock_commands.tcl]}]]
+set mib_dir [file join $script_dir .. mibs ASCII_CSIM]
+if {[llength $argv] >= 1} {
+  set mib_dir [lindex $argv 0]
+}
+set mib_dir [file normalize $mib_dir]
+
+set out_file [file join $script_dir mock_commands.tcl]
+if {[llength $argv] >= 2} {
+  set out_file [lindex $argv 1]
+}
+set out_file [file normalize $out_file]
 
 set commands [build_command_index $mib_dir]
 render_mock_file $commands $out_file

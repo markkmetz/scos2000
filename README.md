@@ -65,6 +65,12 @@ Run:
 ./examples/generate_mock_commands.tcl
 ```
 
+Custom input/output:
+
+```bash
+./examples/generate_mock_commands.tcl /path/to/mib-dir /path/to/mock_commands.tcl
+```
+
 ## Notes
 
 - README is short on purpose.
