@@ -29,6 +29,15 @@ proc required_call_args {proc_name} {
   return $args
 }
 
+proc payload_value {payload label} {
+  foreach param_entry [lrange $payload 1 end] {
+    if {[lindex $param_entry 0] eq $label} {
+      return [lindex $param_entry 1]
+    }
+  }
+  return "__MISSING__"
+}
+
 set all_procs [lsort [info procs]]
 set generated_procs {}
 foreach proc_name $all_procs {
@@ -41,6 +50,7 @@ set failed_calls {}
 set non_friendly_args {}
 set payload_id_labels {}
 set payload_non_id_labels {}
+set auto_count_failures {}
 
 foreach proc_name $generated_procs {
   foreach arg [info args $proc_name] {
@@ -71,11 +81,38 @@ foreach proc_name $generated_procs {
   }
 }
 
+if {[llength [info procs TC_6_1]] > 0} {
+  set sample_words [list AA BB]
+  if {[catch {set payload [TC_6_1 1 4096 0 "" $sample_words]} err]} {
+    lappend auto_count_failures [list TC_6_1 $err]
+  } else {
+    set count_value [payload_value $payload S2KCP031]
+    set words_value [payload_value $payload S2KCP032]
+    if {$count_value ne "2" || [llength $words_value] != 2} {
+      lappend auto_count_failures [list TC_6_1 "Expected S2KCP031=2 and 2 words, got S2KCP031=$count_value words=$words_value"]
+    }
+  }
+}
+
+if {[llength [info procs TC_6_2]] > 0} {
+  set sample_words [list 10 20 30]
+  if {[catch {set payload [TC_6_2 1 8192 "" $sample_words]} err]} {
+    lappend auto_count_failures [list TC_6_2 $err]
+  } else {
+    set count_value [payload_value $payload S2KCP031]
+    set words_value [payload_value $payload S2KCP032]
+    if {$count_value ne "3" || [llength $words_value] != 3} {
+      lappend auto_count_failures [list TC_6_2 "Expected S2KCP031=3 and 3 words, got S2KCP031=$count_value words=$words_value"]
+    }
+  }
+}
+
 puts "Checked [llength $generated_procs] generated procs from $mock_file"
 puts "Invocation failures: [llength $failed_calls]"
 puts "Non-friendly argument names: [llength $non_friendly_args]"
 puts "Payload labels using S2KCP IDs: [llength $payload_id_labels]"
 puts "Payload labels not using S2KCP IDs: [llength $payload_non_id_labels]"
+puts "Auto-count validation failures: [llength $auto_count_failures]"
 
 if {[llength $failed_calls] > 0} {
   puts "Sample invocation failures:"
@@ -95,5 +132,12 @@ if {[llength $payload_non_id_labels] > 0} {
   puts "Sample non-ID payload labels:"
   foreach unresolved [lrange $payload_non_id_labels 0 9] {
     puts "  [lindex $unresolved 0] -> [lindex $unresolved 1]"
+  }
+}
+
+if {[llength $auto_count_failures] > 0} {
+  puts "Auto-count failure details:"
+  foreach failure $auto_count_failures {
+    puts "  [lindex $failure 0] -> [lindex $failure 1]"
   }
 }

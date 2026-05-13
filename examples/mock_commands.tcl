@@ -236,28 +236,30 @@ proc TC_5_6 {Report_ID} {
     return $payload
 }
 
-proc TC_6_1 {Memory_ID Base Offset Number_of_Words {Filler {}} args} {
+proc TC_6_1 {Memory_ID Base Offset {Filler {}} {Memory_Load_Data {}}} {
     # S2KTC033: Load Memory Using Base Address Plus Offsets
     set payload [list S2KTC033]
+    set Number_of_Words [llength $Memory_Load_Data]
     lappend payload [list {S2KCP027} $Memory_ID]
     lappend payload [list {S2KCP029} $Base]
     lappend payload [list {S2KCP030} $Offset]
     lappend payload [list {S2KCP031} $Number_of_Words]
     if {$Filler ne ""} { lappend payload [list {Filler} $Filler] }
     # Variable-length parameter(s): S2KCP032
-    if {[llength $args] > 0} { lappend payload [list {S2KCP032} $args] }
+    if {[llength $Memory_Load_Data] > 0} { lappend payload [list {S2KCP032} $Memory_Load_Data] }
     return $payload
 }
 
-proc TC_6_2 {Memory_ID Start_Address Number_of_Words {Filler {}} args} {
+proc TC_6_2 {Memory_ID Start_Address {Filler {}} {Memory_Load_Data {}}} {
     # S2KTC034: Load Memory Using Absolute Addresses
     set payload [list S2KTC034]
+    set Number_of_Words [llength $Memory_Load_Data]
     lappend payload [list {S2KCP027} $Memory_ID]
     lappend payload [list {S2KCP033} $Start_Address]
     lappend payload [list {S2KCP031} $Number_of_Words]
     if {$Filler ne ""} { lappend payload [list {Filler} $Filler] }
     # Variable-length parameter(s): S2KCP032
-    if {[llength $args] > 0} { lappend payload [list {S2KCP032} $args] }
+    if {[llength $Memory_Load_Data] > 0} { lappend payload [list {S2KCP032} $Memory_Load_Data] }
     return $payload
 }
 
@@ -339,13 +341,13 @@ proc TC_11_3 {} {
     return $payload
 }
 
-proc TC_11_4 {Sub_schedule_ID Time_Tag args} {
+proc TC_11_4 {Sub_schedule_ID Time_Tag {TC_Packet {}}} {
     # S2KTC044: Insert Telecommands In Command Schedule
     set payload [list S2KTC044]
     lappend payload [list {S2KCP037} $Sub_schedule_ID]
     lappend payload [list {S2KCP038} $Time_Tag]
     # Variable-length parameter(s): S2KCP039
-    if {[llength $args] > 0} { lappend payload [list {S2KCP039} $args] }
+    if {[llength $TC_Packet] > 0} { lappend payload [list {S2KCP039} $TC_Packet] }
     return $payload
 }
 
@@ -562,39 +564,39 @@ proc TC_13_8 {} {
     return $payload
 }
 
-proc TC_13_9 {Sequence_Number args} {
+proc TC_13_9 {Sequence_Number {Service_Data_Unit_Part {}}} {
     # S2KTC069: Accept First Uplink Part
     set payload [list S2KTC069]
     lappend payload [list {S2KCP056} $Sequence_Number]
     # Variable-length parameter(s): S2KCP058
-    if {[llength $args] > 0} { lappend payload [list {S2KCP058} $args] }
+    if {[llength $Service_Data_Unit_Part] > 0} { lappend payload [list {S2KCP058} $Service_Data_Unit_Part] }
     return $payload
 }
 
-proc TC_13_10 {Sequence_Number args} {
+proc TC_13_10 {Sequence_Number {Service_Data_Unit_Part {}}} {
     # S2KTC070: Accept Intermediate Uplink Part
     set payload [list S2KTC070]
     lappend payload [list {S2KCP056} $Sequence_Number]
     # Variable-length parameter(s): S2KCP058
-    if {[llength $args] > 0} { lappend payload [list {S2KCP058} $args] }
+    if {[llength $Service_Data_Unit_Part] > 0} { lappend payload [list {S2KCP058} $Service_Data_Unit_Part] }
     return $payload
 }
 
-proc TC_13_11 {Sequence_Number args} {
+proc TC_13_11 {Sequence_Number {Service_Data_Unit_Part {}}} {
     # S2KTC071: Accept Last Uplink Part
     set payload [list S2KTC071]
     lappend payload [list {S2KCP056} $Sequence_Number]
     # Variable-length parameter(s): S2KCP058
-    if {[llength $args] > 0} { lappend payload [list {S2KCP058} $args] }
+    if {[llength $Service_Data_Unit_Part] > 0} { lappend payload [list {S2KCP058} $Service_Data_Unit_Part] }
     return $payload
 }
 
-proc TC_13_12 {Sequence_Number args} {
+proc TC_13_12 {Sequence_Number {Service_Data_Unit_Part {}}} {
     # S2KTC072: Accept Repeated Part
     set payload [list S2KTC072]
     lappend payload [list {S2KCP056} $Sequence_Number]
     # Variable-length parameter(s): S2KCP058
-    if {[llength $args] > 0} { lappend payload [list {S2KCP058} $args] }
+    if {[llength $Service_Data_Unit_Part] > 0} { lappend payload [list {S2KCP058} $Service_Data_Unit_Part] }
     return $payload
 }
 
@@ -798,13 +800,13 @@ proc TC_17_1 {} {
     return $payload
 }
 
-proc TC_18_1 {Procedure_ID Length args} {
+proc TC_18_1 {Procedure_ID Length {Code {}}} {
     # S2KTC097: Load Procedure
     set payload [list S2KTC097]
     lappend payload [list {S2KCP080} $Procedure_ID]
     lappend payload [list {S2KCP081} $Length]
     # Variable-length parameter(s): S2KCP082
-    if {[llength $args] > 0} { lappend payload [list {S2KCP082} $args] }
+    if {[llength $Code] > 0} { lappend payload [list {S2KCP082} $Code] }
     return $payload
 }
 
@@ -872,13 +874,13 @@ proc TC_18_12 {Procedure_ID} {
     return $payload
 }
 
-proc TC_19_1 {APID Event_ID args} {
+proc TC_19_1 {APID Event_ID {TC_Packet {}}} {
     # S2KTC107: Add Events To The Detection List
     set payload [list S2KTC107]
     lappend payload [list {S2KCP086} $APID]
     lappend payload [list {S2KCP087} $Event_ID]
     # Variable-length parameter(s): S2KCP088
-    if {[llength $args] > 0} { lappend payload [list {S2KCP088} $args] }
+    if {[llength $TC_Packet] > 0} { lappend payload [list {S2KCP088} $TC_Packet] }
     return $payload
 }
 
@@ -1037,14 +1039,14 @@ proc TC_11_3_Rosetta {} {
     return $payload
 }
 
-proc TC_11_4_Rosetta {ExecutionTime_Rosetta SubScheduleID_Rosetta {PAD_8 {}} args} {
+proc TC_11_4_Rosetta {ExecutionTime_Rosetta SubScheduleID_Rosetta {PAD_8 {}} {TC_Packet_Rosetta {}}} {
     # S2KTC304: Insert TCs In Command Schedule (Rosetta compatibility)
     set payload [list S2KTC304]
     lappend payload [list {S2KCP303} $ExecutionTime_Rosetta]
     lappend payload [list {S2KCP301} $SubScheduleID_Rosetta]
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     # Variable-length parameter(s): S2KCP304
-    if {[llength $args] > 0} { lappend payload [list {S2KCP304} $args] }
+    if {[llength $TC_Packet_Rosetta] > 0} { lappend payload [list {S2KCP304} $TC_Packet_Rosetta] }
     return $payload
 }
 
@@ -1173,7 +1175,7 @@ proc TC_255_255 {Unsigned_param_1 Unsigned_param_2 Unsigned_param_3 Unsigned_par
     return $payload
 }
 
-proc TC_255_64 {Unsigned_param_1 Unsigned_param_2 Unsigned_param_3 Unsigned_param_4 Unsigned_param_5 Unsigned_param_6 Unsigned_param_7 Unsigned_param_8 Unsigned_param_9 Unsigned_param_10 Unsigned_param_11 Unsigned_param_12 Unsigned_param_13 Unsigned_param_14 Unsigned_param_15 Unsigned_param_16 Unsigned_param_17 Unsigned_param_18 Unsigned_param_19 Unsigned_param_20 Unsigned_param_21 args} {
+proc TC_255_64 {Unsigned_param_1 Unsigned_param_2 Unsigned_param_3 Unsigned_param_4 Unsigned_param_5 Unsigned_param_6 Unsigned_param_7 Unsigned_param_8 Unsigned_param_9 Unsigned_param_10 Unsigned_param_11 Unsigned_param_12 Unsigned_param_13 Unsigned_param_14 Unsigned_param_15 Unsigned_param_16 Unsigned_param_17 Unsigned_param_18 Unsigned_param_19 Unsigned_param_20 Unsigned_param_21 {Variable_string {}}} {
     # S2KTC604: Large list of unsigned params. Out of PUS services
     set payload [list S2KTC604]
     lappend payload [list {S2KCP209} $Unsigned_param_1]
@@ -1198,23 +1200,23 @@ proc TC_255_64 {Unsigned_param_1 Unsigned_param_2 Unsigned_param_3 Unsigned_para
     lappend payload [list {S2KCP230} $Unsigned_param_20]
     lappend payload [list {S2KCP231} $Unsigned_param_21]
     # Variable-length parameter(s): S2KCP800
-    if {[llength $args] > 0} { lappend payload [list {S2KCP800} $args] }
+    if {[llength $Variable_string] > 0} { lappend payload [list {S2KCP800} $Variable_string] }
     return $payload
 }
 
-proc Command_ID {args} {
+proc Command_ID {{Command_ID_Type {}}} {
     # S2KTC700: 
     set payload [list S2KTC700]
     # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    if {[llength $Command_ID_Type] > 0} { lappend payload [list {S2KCP900} $Command_ID_Type] }
     return $payload
 }
 
-proc Command_ID_default {args} {
+proc Command_ID_default {{Command_ID_Type {}}} {
     # S2KTC701: 
     set payload [list S2KTC701]
     # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    if {[llength $Command_ID_Type] > 0} { lappend payload [list {S2KCP900} $Command_ID_Type] }
     return $payload
 }
 
@@ -1232,30 +1234,30 @@ proc Parameter_ID_default {Parameter_Id_Type} {
     return $payload
 }
 
-proc Cmd_ID_Param_ID {Parameter_Id_Type args} {
+proc Cmd_ID_Param_ID {Parameter_Id_Type {Command_ID_Type {}}} {
     # S2KTC704: Invalid default values
     set payload [list S2KTC704]
     lappend payload [list {S2KCP901} $Parameter_Id_Type]
     # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    if {[llength $Command_ID_Type] > 0} { lappend payload [list {S2KCP900} $Command_ID_Type] }
     return $payload
 }
 
-proc ThrowEvent_Test1 {{Event_Identifier {}} args} {
+proc ThrowEvent_Test1 {{Event_Identifier {}} {Event_Qualifier {}}} {
     # S2KTCTE1: 
     set payload [list S2KTCTE1]
     if {$Event_Identifier ne ""} { lappend payload [list {Event Identifier} $Event_Identifier] }
     # Variable-length parameter(s): S2KCPTHE
-    if {[llength $args] > 0} { lappend payload [list {S2KCPTHE} $args] }
+    if {[llength $Event_Qualifier] > 0} { lappend payload [list {S2KCPTHE} $Event_Qualifier] }
     return $payload
 }
 
-proc ThrowEvent_Test2 {Event_Identifier args} {
+proc ThrowEvent_Test2 {Event_Identifier {Event_Qualifier {}}} {
     # S2KTCTE2: 
     set payload [list S2KTCTE2]
     lappend payload [list {S2KCPEVI} $Event_Identifier]
     # Variable-length parameter(s): S2KCPSTR
-    if {[llength $args] > 0} { lappend payload [list {S2KCPSTR} $args] }
+    if {[llength $Event_Qualifier] > 0} { lappend payload [list {S2KCPSTR} $Event_Qualifier] }
     return $payload
 }
 

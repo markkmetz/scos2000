@@ -74,6 +74,23 @@ proc is_variable_length_param {bit_length} {
   return [expr {[string trim $bit_length] eq "0"}]
 }
 
+proc is_count_param_name {name} {
+  set normalized [string tolower [string trim $name]]
+  if {$normalized eq ""} {
+    return 0
+  }
+  if {[regexp {^number[ _]of([ _].*)?$} $normalized]} {
+    return 1
+  }
+  if {[regexp {^no([ _].*)?$} $normalized]} {
+    return 1
+  }
+  if {[regexp {^n([ _].*)?$} $normalized]} {
+    return 1
+  }
+  return 0
+}
+
 proc build_cpc_name_index {mib_dir} {
   set cpc_path [find_mib_file $mib_dir "cpc.dat"]
   set names [dict create]
@@ -252,13 +269,33 @@ proc render_mock_file {commands out_file} {
     }
 
     set arg_spec {}
+    set auto_count_param_arg ""
+    set single_variable_param {}
+    if {[llength $variable_params] == 1} {
+      set single_variable_param [lindex $variable_params 0]
+      if {[llength $required_params] > 0} {
+        set candidate [lindex $required_params end]
+        set candidate_display [dict get $candidate display]
+        set candidate_arg [dict get $candidate arg]
+        if {[is_count_param_name $candidate_display] || [is_count_param_name $candidate_arg]} {
+          set auto_count_param_arg $candidate_arg
+        }
+      }
+    }
+
     foreach param_spec $required_params {
-      lappend arg_spec [dict get $param_spec arg]
+      set arg_name [dict get $param_spec arg]
+      if {$arg_name eq $auto_count_param_arg} {
+        continue
+      }
+      lappend arg_spec $arg_name
     }
     foreach param_spec $optional_params {
       lappend arg_spec [list [dict get $param_spec arg] ""]
     }
-    if {[llength $variable_params] > 0} {
+    if {[llength $variable_params] == 1} {
+      lappend arg_spec [list [dict get $single_variable_param arg] {}]
+    } elseif {[llength $variable_params] > 1} {
       lappend arg_spec args
     }
 
@@ -266,6 +303,10 @@ proc render_mock_file {commands out_file} {
     puts $channel "proc $proc_name {$arg_spec_text} {"
     puts $channel "    # $tc_id: [dict get $entry description]"
     puts $channel [format {    set payload [list %s]} $tc_id]
+    if {$auto_count_param_arg ne ""} {
+      set variable_list_arg [dict get $single_variable_param arg]
+      puts $channel [format {    set %s [llength $%s]} $auto_count_param_arg $variable_list_arg]
+    }
 
     foreach param_spec $required_params {
       set raw [dict get $param_spec raw]
@@ -287,7 +328,9 @@ proc render_mock_file {commands out_file} {
 
       puts $channel "    # Variable-length parameter(s): [join $variable_names ", "]"
       if {[llength $variable_names] == 1} {
-        puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} [lindex $variable_names 0]]
+        set variable_param [lindex $variable_params 0]
+        set variable_arg [dict get $variable_param arg]
+        puts $channel [format {    if {[llength $%s] > 0} { lappend payload [list {%s} $%s] }} $variable_arg [lindex $variable_names 0] $variable_arg]
       } else {
         puts $channel "    # Multiple variable-length parameters are encoded as VARARGS:param1,param2,..."
         set variable_key "VARARGS:[join $variable_names ","]"
