@@ -62,7 +62,7 @@ foreach proc_name $generated_procs {
   }
 
   set call_args [required_call_args $proc_name]
-  if {[catch {set payload [uplevel #0 [list $proc_name {*}$call_args]]} err]} {
+  if {[catch {set payload [{*}[list $proc_name {*}$call_args]]} err]} {
     lappend failed_calls [list $proc_name $err]
     continue
   }
@@ -82,26 +82,28 @@ foreach proc_name $generated_procs {
 
 if {[llength [info procs TC_6_1]] > 0} {
   set sample_words [list AA BB]
+  set expected_count [llength $sample_words]
   if {[catch {set payload [TC_6_1 1 4096 0 "" $sample_words]} err]} {
     lappend auto_count_failures [list TC_6_1 $err]
   } else {
     set count_value [payload_value $payload S2KCP031]
     set words_value [payload_value $payload S2KCP032]
-    if {$count_value ne "2" || [llength $words_value] != 2} {
-      lappend auto_count_failures [list TC_6_1 "Expected S2KCP031=2 and 2 words, got S2KCP031=$count_value words=$words_value"]
+    if {$count_value ne $expected_count || [llength $words_value] != $expected_count} {
+      lappend auto_count_failures [list TC_6_1 "Expected S2KCP031=$expected_count and $expected_count words, got S2KCP031=$count_value words=$words_value"]
     }
   }
 }
 
 if {[llength [info procs TC_6_2]] > 0} {
   set sample_words [list 10 20 30]
+  set expected_count [llength $sample_words]
   if {[catch {set payload [TC_6_2 1 8192 "" $sample_words]} err]} {
     lappend auto_count_failures [list TC_6_2 $err]
   } else {
     set count_value [payload_value $payload S2KCP031]
     set words_value [payload_value $payload S2KCP032]
-    if {$count_value ne "3" || [llength $words_value] != 3} {
-      lappend auto_count_failures [list TC_6_2 "Expected S2KCP031=3 and 3 words, got S2KCP031=$count_value words=$words_value"]
+    if {$count_value ne $expected_count || [llength $words_value] != $expected_count} {
+      lappend auto_count_failures [list TC_6_2 "Expected S2KCP031=$expected_count and $expected_count words, got S2KCP031=$count_value words=$words_value"]
     }
   }
 }
