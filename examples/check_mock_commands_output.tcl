@@ -37,9 +37,20 @@ foreach proc_name $all_procs {
 }
 
 set failed_calls {}
-set unresolved_labels {}
+set non_friendly_args {}
+set payload_id_labels {}
+set payload_non_id_labels {}
 
 foreach proc_name $generated_procs {
+  foreach arg [info args $proc_name] {
+    if {$arg eq "args"} {
+      continue
+    }
+    if {[regexp {^S2KCP[0-9]+$} $arg]} {
+      lappend non_friendly_args [list $proc_name $arg]
+    }
+  }
+
   set call_args [required_call_args $proc_name]
   if {[catch {set payload [uplevel #0 [list $proc_name {*}$call_args]]} err]} {
     lappend failed_calls [list $proc_name $err]
@@ -48,15 +59,22 @@ foreach proc_name $generated_procs {
 
   foreach param_entry [lrange $payload 1 end] {
     set label [lindex $param_entry 0]
+    if {$label eq "" || [string match "VARARGS:*" $label]} {
+      continue
+    }
     if {[regexp {^S2KCP[0-9]+$} $label]} {
-      lappend unresolved_labels [list $proc_name $label]
+      lappend payload_id_labels [list $proc_name $label]
+    } else {
+      lappend payload_non_id_labels [list $proc_name $label]
     }
   }
 }
 
 puts "Checked [llength $generated_procs] generated procs from $mock_file"
 puts "Invocation failures: [llength $failed_calls]"
-puts "Unresolved S2KCP labels: [llength $unresolved_labels]"
+puts "Non-friendly argument names: [llength $non_friendly_args]"
+puts "Payload labels using S2KCP IDs: [llength $payload_id_labels]"
+puts "Payload labels not using S2KCP IDs: [llength $payload_non_id_labels]"
 
 if {[llength $failed_calls] > 0} {
   puts "Sample invocation failures:"
@@ -65,9 +83,16 @@ if {[llength $failed_calls] > 0} {
   }
 }
 
-if {[llength $unresolved_labels] > 0} {
-  puts "Sample unresolved labels:"
-  foreach unresolved [lrange $unresolved_labels 0 9] {
+if {[llength $non_friendly_args] > 0} {
+  puts "Sample non-friendly args:"
+  foreach bad_arg [lrange $non_friendly_args 0 9] {
+    puts "  [lindex $bad_arg 0] -> [lindex $bad_arg 1]"
+  }
+}
+
+if {[llength $payload_non_id_labels] > 0} {
+  puts "Sample non-ID payload labels:"
+  foreach unresolved [lrange $payload_non_id_labels 0 9] {
     puts "  [lindex $unresolved 0] -> [lindex $unresolved 1]"
   }
 }

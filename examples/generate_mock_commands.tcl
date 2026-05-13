@@ -151,6 +151,7 @@ proc build_command_index {mib_dir} {
       kind [lindex $cols 1] \
       name $param_name \
       preferred_name $preferred_name \
+      payload_name $param_id \
       bit_length [lindex $cols 3] \
       param_id $param_id]
 
@@ -204,15 +205,21 @@ proc render_mock_file {commands out_file} {
 
     foreach param [dict get $entry params] {
       set friendly_param_name [dict get $param preferred_name]
+      set payload_param_name [dict get $param payload_name]
       set param_id [dict get $param param_id]
-      set raw_param_label $friendly_param_name
-      if {[string trim $raw_param_label] eq "" && [string trim $param_id] ne ""} {
-        set raw_param_label $param_id
-      } elseif {[string trim $raw_param_label] eq ""} {
-        set raw_param_label "param$index"
+      set arg_param_label $friendly_param_name
+      if {[string trim $arg_param_label] eq "" && [string trim $param_id] ne ""} {
+        set arg_param_label $param_id
+      } elseif {[string trim $arg_param_label] eq ""} {
+        set arg_param_label "param$index"
       }
 
-      set arg_name [sanitize_identifier $raw_param_label "param$index"]
+      set raw_param_label $payload_param_name
+      if {[string trim $raw_param_label] eq ""} {
+        set raw_param_label $arg_param_label
+      }
+
+      set arg_name [sanitize_identifier $arg_param_label "param$index"]
       set unique_arg_name $arg_name
       set suffix 2
       while {[dict exists $used_arg_names $unique_arg_name]} {
