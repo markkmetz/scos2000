@@ -74,9 +74,34 @@ proc is_variable_length_param {bit_length} {
   return [expr {[string trim $bit_length] eq "0"}]
 }
 
+proc build_cpc_name_index {mib_dir} {
+  set cpc_path [find_mib_file $mib_dir "cpc.dat"]
+  set names [dict create]
+
+  foreach line [read_lines $cpc_path] {
+    set trimmed [string trim $line]
+    if {$trimmed eq "" || [string first "#" $trimmed] == 0} {
+      continue
+    }
+
+    set cols [split_dat_line $line]
+    set param_id [lindex $cols 0]
+    set param_name [lindex $cols 1]
+
+    if {[string trim $param_id] eq "" || [string trim $param_name] eq ""} {
+      continue
+    }
+
+    dict set names $param_id $param_name
+  }
+
+  return $names
+}
+
 proc build_command_index {mib_dir} {
   set ccf_path [find_mib_file $mib_dir "ccf.dat"]
   set cdf_path [find_mib_file $mib_dir "cdf.dat"]
+  set cpc_names [build_cpc_name_index $mib_dir]
 
   set commands [dict create]
 
@@ -114,11 +139,20 @@ proc build_command_index {mib_dir} {
       continue
     }
 
+    set param_name [lindex $cols 2]
+    set param_id [lindex $cols 6]
+    set preferred_name $param_name
+    set preferred_is_id [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
+    if {([string trim $preferred_name] eq "" || $preferred_is_id) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]} {
+      set preferred_name [dict get $cpc_names $param_id]
+    }
+
     set param [dict create \
       kind [lindex $cols 1] \
-      name [lindex $cols 2] \
+      name $param_name \
+      preferred_name $preferred_name \
       bit_length [lindex $cols 3] \
-      param_id [lindex $cols 6]]
+      param_id $param_id]
 
     set entry [dict get $commands $tc_id]
     set params [dict get $entry params]
@@ -169,7 +203,7 @@ proc render_mock_file {commands out_file} {
     set index 1
 
     foreach param [dict get $entry params] {
-      set friendly_param_name [dict get $param name]
+      set friendly_param_name [dict get $param preferred_name]
       set param_id [dict get $param param_id]
       set raw_param_label $friendly_param_name
       if {[string trim $raw_param_label] eq "" && [string trim $param_id] ne ""} {

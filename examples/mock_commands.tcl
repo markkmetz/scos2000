@@ -928,10 +928,10 @@ proc TC_8_1_S2KTC113 {Function_ID Current Extent Limit} {
     return $payload
 }
 
-proc TC_17_1_Header_3 {S2KCP107} {
+proc TC_17_1_Header_3 {REAL_TEXTUAL_CALIB} {
     # S2KTC114: Perform connection test using Header type 3
     set payload [list S2KTC114]
-    lappend payload [list {S2KCP107} $S2KCP107]
+    lappend payload [list {REAL, TEXTUAL CALIB} $REAL_TEXTUAL_CALIB]
     return $payload
 }
 
@@ -1011,21 +1011,21 @@ proc Multiple_Echo_Verif {HPC_Module HPC_Line_ID HPC_Pulse_Duration} {
     return $payload
 }
 
-proc TC_11_1_Rosetta {S2KCP301 S2KCP302 {PAD_8 {}} {PAD_5 {}}} {
+proc TC_11_1_Rosetta {SubScheduleID_Rosetta APID_Rosetta {PAD_8 {}} {PAD_5 {}}} {
     # S2KTC301: Enable Release Of Telecommands (Rosetta compatibility)
     set payload [list S2KTC301]
-    lappend payload [list {S2KCP301} $S2KCP301]
-    lappend payload [list {S2KCP302} $S2KCP302]
+    lappend payload [list {SubScheduleID (Rosetta)} $SubScheduleID_Rosetta]
+    lappend payload [list {APID (Rosetta)} $APID_Rosetta]
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     if {$PAD_5 ne ""} { lappend payload [list {PAD_5} $PAD_5] }
     return $payload
 }
 
-proc TC_11_2_Rosetta {S2KCP301 S2KCP302 {PAD_8 {}} {PAD_5 {}}} {
+proc TC_11_2_Rosetta {SubScheduleID_Rosetta APID_Rosetta {PAD_8 {}} {PAD_5 {}}} {
     # S2KTC302: Disable Release Of Selected TCs (Rosetta compatibility)
     set payload [list S2KTC302]
-    lappend payload [list {S2KCP301} $S2KCP301]
-    lappend payload [list {S2KCP302} $S2KCP302]
+    lappend payload [list {SubScheduleID (Rosetta)} $SubScheduleID_Rosetta]
+    lappend payload [list {APID (Rosetta)} $APID_Rosetta]
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     if {$PAD_5 ne ""} { lappend payload [list {PAD_5} $PAD_5] }
     return $payload
@@ -1037,52 +1037,52 @@ proc TC_11_3_Rosetta {} {
     return $payload
 }
 
-proc TC_11_4_Rosetta {S2KCP303 S2KCP301 {PAD_8 {}} args} {
+proc TC_11_4_Rosetta {ExecutionTime_Rosetta SubScheduleID_Rosetta {PAD_8 {}} args} {
     # S2KTC304: Insert TCs In Command Schedule (Rosetta compatibility)
     set payload [list S2KTC304]
-    lappend payload [list {S2KCP303} $S2KCP303]
-    lappend payload [list {S2KCP301} $S2KCP301]
+    lappend payload [list {ExecutionTime(Rosetta)} $ExecutionTime_Rosetta]
+    lappend payload [list {SubScheduleID (Rosetta)} $SubScheduleID_Rosetta]
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
-    # Variable-length parameter(s): S2KCP304
-    if {[llength $args] > 0} { lappend payload [list {S2KCP304} $args] }
+    # Variable-length parameter(s): TC Packet (Rosetta)
+    if {[llength $args] > 0} { lappend payload [list {TC Packet (Rosetta)} $args] }
     return $payload
 }
 
-proc TC_11_5_Rosetta {S2KCP302 S2KCP305 S2KCP306 {PAD_5 {}} {PAD_2 {}} {PAD_8 {}}} {
+proc TC_11_5_Rosetta {APID_Rosetta SequenceCount_Rosetta No_Commands_Rosetta {PAD_5 {}} {PAD_2 {}} {PAD_8 {}}} {
     # S2KTC305: Delete TCs by APID and Sequence Counter  (Rosetta compatibility)
     set payload [list S2KTC305]
-    lappend payload [list {S2KCP302} $S2KCP302]
-    lappend payload [list {S2KCP305} $S2KCP305]
-    lappend payload [list {S2KCP306} $S2KCP306]
+    lappend payload [list {APID (Rosetta)} $APID_Rosetta]
+    lappend payload [list {SequenceCount (Rosetta)} $SequenceCount_Rosetta]
+    lappend payload [list {No.Commands (Rosetta)} $No_Commands_Rosetta]
     if {$PAD_5 ne ""} { lappend payload [list {PAD_5} $PAD_5] }
     if {$PAD_2 ne ""} { lappend payload [list {PAD_2} $PAD_2] }
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     return $payload
 }
 
-proc TC_11_6_Rosetta {S2KCP307 S2KCP308 S2KCP309 S2KCP301 S2KCP302 {PAD_14 {}} {PAD_8 {}} {PAD_5 {}}} {
+proc TC_11_6_Rosetta {Time_Range_Rosetta Time_Tag_1_Rosetta Time_Tag_2_Rosetta SubScheduleID_Rosetta APID_Rosetta {PAD_14 {}} {PAD_8 {}} {PAD_5 {}}} {
     # S2KTC306: Delete TCs over Time Period (Rosetta compatibility)
     set payload [list S2KTC306]
-    lappend payload [list {S2KCP307} $S2KCP307]
-    lappend payload [list {S2KCP308} $S2KCP308]
-    lappend payload [list {S2KCP309} $S2KCP309]
-    lappend payload [list {S2KCP301} $S2KCP301]
-    lappend payload [list {S2KCP302} $S2KCP302]
+    lappend payload [list {Time Range (Rosetta)} $Time_Range_Rosetta]
+    lappend payload [list {Time Tag 1 (Rosetta)} $Time_Tag_1_Rosetta]
+    lappend payload [list {Time Tag 2 (Rosetta)} $Time_Tag_2_Rosetta]
+    lappend payload [list {SubScheduleID (Rosetta)} $SubScheduleID_Rosetta]
+    lappend payload [list {APID (Rosetta)} $APID_Rosetta]
     if {$PAD_14 ne ""} { lappend payload [list {PAD_14} $PAD_14] }
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     if {$PAD_5 ne ""} { lappend payload [list {PAD_5} $PAD_5] }
     return $payload
 }
 
-proc TC_11_8_Rosetta {S2KCP307 S2KCP308 S2KCP309 S2KCP310 S2KCP301 S2KCP302 {PAD_14 {}} {PAD_8 {}} {PAD_5 {}}} {
+proc TC_11_8_Rosetta {Time_Range_Rosetta Time_Tag_1_Rosetta Time_Tag_2_Rosetta Time_Offset_Rosetta SubScheduleID_Rosetta APID_Rosetta {PAD_14 {}} {PAD_8 {}} {PAD_5 {}}} {
     # S2KTC308: Time-Shift TCs over Time Period (Rosetta compatibility)
     set payload [list S2KTC308]
-    lappend payload [list {S2KCP307} $S2KCP307]
-    lappend payload [list {S2KCP308} $S2KCP308]
-    lappend payload [list {S2KCP309} $S2KCP309]
-    lappend payload [list {S2KCP310} $S2KCP310]
-    lappend payload [list {S2KCP301} $S2KCP301]
-    lappend payload [list {S2KCP302} $S2KCP302]
+    lappend payload [list {Time Range (Rosetta)} $Time_Range_Rosetta]
+    lappend payload [list {Time Tag 1 (Rosetta)} $Time_Tag_1_Rosetta]
+    lappend payload [list {Time Tag 2 (Rosetta)} $Time_Tag_2_Rosetta]
+    lappend payload [list {Time Offset (Rosetta)} $Time_Offset_Rosetta]
+    lappend payload [list {SubScheduleID (Rosetta)} $SubScheduleID_Rosetta]
+    lappend payload [list {APID (Rosetta)} $APID_Rosetta]
     if {$PAD_14 ne ""} { lappend payload [list {PAD_14} $PAD_14] }
     if {$PAD_8 ne ""} { lappend payload [list {PAD_8} $PAD_8] }
     if {$PAD_5 ne ""} { lappend payload [list {PAD_5} $PAD_5] }
@@ -1096,10 +1096,10 @@ proc Unlock_Control_Command {{Unlock_Octet {}}} {
     return $payload
 }
 
-proc SetV_R_Control_Command {S2KCP501 {SetV_R_Octet_1 {}} {SetV_R_Octet_2 {}}} {
+proc SetV_R_Control_Command {SetV_R_Octet_3 {SetV_R_Octet_1 {}} {SetV_R_Octet_2 {}}} {
     # S2KTC502: FARM directive: Set V(R) Control Command
     set payload [list S2KTC502]
-    lappend payload [list {S2KCP501} $S2KCP501]
+    lappend payload [list {SetV(R) Octet 3} $SetV_R_Octet_3]
     if {$SetV_R_Octet_1 ne ""} { lappend payload [list {SetV(R) Octet 1} $SetV_R_Octet_1] }
     if {$SetV_R_Octet_2 ne ""} { lappend payload [list {SetV(R) Octet 2} $SetV_R_Octet_2] }
     return $payload
@@ -1205,39 +1205,39 @@ proc TC_255_64 {Unsigned_param_1 Unsigned_param_2 Unsigned_param_3 Unsigned_para
 proc Command_ID {args} {
     # S2KTC700: 
     set payload [list S2KTC700]
-    # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    # Variable-length parameter(s): Command ID Type
+    if {[llength $args] > 0} { lappend payload [list {Command ID Type} $args] }
     return $payload
 }
 
 proc Command_ID_default {args} {
     # S2KTC701: 
     set payload [list S2KTC701]
-    # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    # Variable-length parameter(s): Command ID Type
+    if {[llength $args] > 0} { lappend payload [list {Command ID Type} $args] }
     return $payload
 }
 
-proc Parameter_ID {S2KCP901} {
+proc Parameter_ID {Parameter_Id_Type} {
     # S2KTC702: 
     set payload [list S2KTC702]
-    lappend payload [list {S2KCP901} $S2KCP901]
+    lappend payload [list {Parameter Id Type} $Parameter_Id_Type]
     return $payload
 }
 
-proc Parameter_ID_default {S2KCP901} {
+proc Parameter_ID_default {Parameter_Id_Type} {
     # S2KTC703: 
     set payload [list S2KTC703]
-    lappend payload [list {S2KCP901} $S2KCP901]
+    lappend payload [list {Parameter Id Type} $Parameter_Id_Type]
     return $payload
 }
 
-proc Cmd_ID_Param_ID {S2KCP901 args} {
+proc Cmd_ID_Param_ID {Parameter_Id_Type args} {
     # S2KTC704: Invalid default values
     set payload [list S2KTC704]
-    lappend payload [list {S2KCP901} $S2KCP901]
-    # Variable-length parameter(s): S2KCP900
-    if {[llength $args] > 0} { lappend payload [list {S2KCP900} $args] }
+    lappend payload [list {Parameter Id Type} $Parameter_Id_Type]
+    # Variable-length parameter(s): Command ID Type
+    if {[llength $args] > 0} { lappend payload [list {Command ID Type} $args] }
     return $payload
 }
 
