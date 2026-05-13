@@ -122,6 +122,12 @@ proc build_command_index {mib_dir} {
   set ccf_path [find_mib_file $mib_dir "ccf.dat"]
   set cdf_path [find_mib_file $mib_dir "cdf.dat"]
   set cpc_index [build_cpc_index $mib_dir]
+  set cdf_param_name_col 2
+  set cdf_bit_length_col 3
+  set cdf_repeat_count_col 6
+  set cdf_repeat_count_col_legacy 5
+  set cdf_param_id_col 7
+  set cdf_param_id_col_legacy 6
 
   set commands [dict create]
 
@@ -159,16 +165,14 @@ proc build_command_index {mib_dir} {
       continue
     }
 
-    set param_name [lindex $cols 2]
-    set raw_col_6 [string trim [lindex $cols 6]]
-    set raw_col_5 [string trim [lindex $cols 5]]
-    set repeat_count ""
-    set param_id $raw_col_6
+    set param_name [lindex $cols $cdf_param_name_col]
+    set raw_col_6 [string trim [lindex $cols $cdf_repeat_count_col]]
+    set raw_col_5 [string trim [lindex $cols $cdf_repeat_count_col_legacy]]
+    set explicit_repeat_count ""
+    set param_id [string trim [lindex $cols $cdf_param_id_col_legacy]]
     if {[string is integer -strict $raw_col_6] && $raw_col_6 > 0} {
-      set repeat_count $raw_col_6
-      set param_id [string trim [lindex $cols 7]]
-    } elseif {[string is integer -strict $raw_col_5] && $raw_col_5 > 0} {
-      set repeat_count $raw_col_5
+      set explicit_repeat_count $raw_col_6
+      set param_id [string trim [lindex $cols $cdf_param_id_col]]
     }
     set preferred_name $param_name
     set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
@@ -186,8 +190,9 @@ proc build_command_index {mib_dir} {
       name $param_name \
       preferred_name $preferred_name \
       payload_name $param_id \
-      bit_length [lindex $cols 3] \
-      group_size $repeat_count \
+      bit_length [lindex $cols $cdf_bit_length_col] \
+      group_size $raw_col_5 \
+      explicit_repeat_count $explicit_repeat_count \
       cpc_categ $cpc_categ \
       param_id $param_id]
 
@@ -274,6 +279,7 @@ proc render_mock_file {commands out_file} {
         display $display_name \
         kind $kind \
         group_size [dict get $param group_size] \
+        explicit_repeat_count [dict get $param explicit_repeat_count] \
         cpc_categ [dict get $param cpc_categ] \
         bit_length $bit_length]
 
@@ -297,11 +303,22 @@ proc render_mock_file {commands out_file} {
     set required_count [llength $required_params]
     for {set i 0} {$i < $required_count} {incr i} {
       set count_param [lindex $required_params $i]
-      set raw_group_size [string trim [dict get $count_param group_size]]
-      if {![string is integer -strict $raw_group_size] || $raw_group_size <= 0} {
-        continue
+      set raw_explicit_repeat_count [string trim [dict get $count_param explicit_repeat_count]]
+      if {[string is integer -strict $raw_explicit_repeat_count] && $raw_explicit_repeat_count > 0} {
+        set group_size $raw_explicit_repeat_count
+      } else {
+        set count_display [dict get $count_param display]
+        set count_arg_name [dict get $count_param arg]
+        if {![is_count_param_name $count_display] && ![is_count_param_name $count_arg_name]} {
+          continue
+        }
+
+        set raw_group_size [string trim [dict get $count_param group_size]]
+        set group_size 1
+        if {[string is integer -strict $raw_group_size] && $raw_group_size > 0} {
+          set group_size $raw_group_size
+        }
       }
-      set group_size $raw_group_size
       if {$i + $group_size >= $required_count} {
         continue
       }

@@ -169,6 +169,15 @@ if {[llength [info procs TC_14_5]] > 0} {
   }
 }
 
+foreach grouped_proc [list TC_14_6 TC_14_9 TC_14_10 TC_14_13 TC_14_14] {
+  if {[llength [info procs $grouped_proc]] == 0} {
+    continue
+  }
+  if {![catch {{*}[list $grouped_proc [list 1 2] [list 11]]}]} {
+    lappend auto_count_failures [list $grouped_proc "Expected list-length mismatch to raise an error"]
+  }
+}
+
 puts "Checked [llength $generated_procs] generated procs from $mock_file"
 puts "Invocation failures: [llength $failed_calls]"
 puts "Non-friendly argument names: [llength $non_friendly_args]"
