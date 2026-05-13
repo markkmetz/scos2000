@@ -79,13 +79,13 @@ proc is_count_param_name {name} {
   if {$normalized eq ""} {
     return 0
   }
-  if {[regexp {^number[ _]of([ _].*)?$} $normalized]} {
+  if {[regexp {^number[_ ]of([_ ].*)?$} $normalized]} {
     return 1
   }
-  if {[regexp {^no([ _].*)?$} $normalized]} {
+  if {[regexp {^no([_ ].*)?$} $normalized]} {
     return 1
   }
-  if {[regexp {^n([ _].*)?$} $normalized]} {
+  if {[regexp {^n([_ ].*)?$} $normalized]} {
     return 1
   }
   return 0
