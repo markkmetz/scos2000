@@ -165,25 +165,36 @@ proc render_mock_file {commands out_file} {
     set required_params {}
     set optional_params {}
     set variable_params {}
+    set used_arg_names [dict create]
     set index 1
 
     foreach param [dict get $entry params] {
-      set raw_param_name [dict get $param param_id]
-      if {[string trim $raw_param_name] eq ""} {
-        set raw_param_name [dict get $param name]
+      set friendly_param_name [dict get $param name]
+      set param_id [dict get $param param_id]
+      set raw_param_label $friendly_param_name
+      if {[string trim $raw_param_label] eq ""} {
+        set raw_param_label $param_id
       }
-      if {[string trim $raw_param_name] eq ""} {
-        set raw_param_name "param$index"
+      if {[string trim $raw_param_label] eq ""} {
+        set raw_param_label "param$index"
       }
 
-      set arg_name [sanitize_identifier $raw_param_name "param$index"]
+      set arg_name [sanitize_identifier $raw_param_label "param$index"]
+      set unique_arg_name $arg_name
+      set suffix 2
+      while {[dict exists $used_arg_names $unique_arg_name]} {
+        set unique_arg_name "${arg_name}_$suffix"
+        incr suffix
+      }
+      dict set used_arg_names $unique_arg_name 1
+
       set kind [dict get $param kind]
       set display_name [dict get $param name]
       set bit_length [dict get $param bit_length]
 
       set param_spec [dict create \
-        raw $raw_param_name \
-        arg $arg_name \
+        raw $raw_param_label \
+        arg $unique_arg_name \
         display $display_name \
         kind $kind \
         bit_length $bit_length]
