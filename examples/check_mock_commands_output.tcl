@@ -88,7 +88,7 @@ if {[llength [info procs TC_6_1]] > 0} {
   } else {
     set count_value [payload_value $payload S2KCP031]
     set words_value [payload_value $payload S2KCP032]
-    if {$count_value ne $expected_count || [llength $words_value] != $expected_count} {
+    if {$count_value != $expected_count || [llength $words_value] != $expected_count} {
       lappend auto_count_failures [list TC_6_1 "Expected S2KCP031=$expected_count and $expected_count words, got S2KCP031=$count_value words=$words_value"]
     }
   }
@@ -102,7 +102,7 @@ if {[llength [info procs TC_6_2]] > 0} {
   } else {
     set count_value [payload_value $payload S2KCP031]
     set words_value [payload_value $payload S2KCP032]
-    if {$count_value ne $expected_count || [llength $words_value] != $expected_count} {
+    if {$count_value != $expected_count || [llength $words_value] != $expected_count} {
       lappend auto_count_failures [list TC_6_2 "Expected S2KCP031=$expected_count and $expected_count words, got S2KCP031=$count_value words=$words_value"]
     }
   }
