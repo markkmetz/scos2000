@@ -62,7 +62,7 @@ proc TC_3_3 {S2KCP013} {
     return $payload
 }
 
-proc TC3_4 {S2KCP014} {
+proc TC_3_4 {S2KCP014} {
     # S2KTC008: Clear Diagnostic Parameter Report Definitions
     set payload [list S2KTC008]
     lappend payload [list {S2KCP014} $S2KCP014]

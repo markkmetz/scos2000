@@ -37,6 +37,10 @@ proc sanitize_identifier {raw fallback} {
   regsub -all {_+} $name {_} name
   set name [string trim $name _]
 
+  if {[regexp {^TC[0-9]} $name]} {
+    regsub {^TC} $name {TC_} name
+  }
+
   if {$name eq ""} {
     set name $fallback
   }
