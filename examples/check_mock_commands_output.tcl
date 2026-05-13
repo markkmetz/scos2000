@@ -2,6 +2,7 @@
 
 set script_dir [file dirname [file normalize [info script]]]
 set mock_file [file join $script_dir mock_commands.tcl]
+set generated_proc_pattern {^(TC_|SetV_|Parameter_ID|Cmd_ID_)}
 if {[llength $argv] >= 1} {
   set mock_file [lindex $argv 0]
 }
@@ -30,7 +31,7 @@ proc required_call_args {proc_name} {
 set all_procs [lsort [info procs]]
 set generated_procs {}
 foreach proc_name $all_procs {
-  if {[regexp {^(TC_|SetV_|Parameter_ID|Cmd_ID_)} $proc_name]} {
+  if {[regexp $generated_proc_pattern $proc_name]} {
     lappend generated_procs $proc_name
   }
 }

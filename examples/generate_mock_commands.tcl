@@ -142,8 +142,8 @@ proc build_command_index {mib_dir} {
     set param_name [lindex $cols 2]
     set param_id [lindex $cols 6]
     set preferred_name $param_name
-    set preferred_is_id [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
-    if {([string trim $preferred_name] eq "" || $preferred_is_id) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]} {
+    set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
+    if {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_names $param_id]} {
       set preferred_name [dict get $cpc_names $param_id]
     }
 
