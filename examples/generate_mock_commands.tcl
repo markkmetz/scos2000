@@ -172,10 +172,9 @@ proc render_mock_file {commands out_file} {
       set friendly_param_name [dict get $param name]
       set param_id [dict get $param param_id]
       set raw_param_label $friendly_param_name
-      if {[string trim $raw_param_label] eq ""} {
+      if {[string trim $raw_param_label] eq "" && [string trim $param_id] ne ""} {
         set raw_param_label $param_id
-      }
-      if {[string trim $raw_param_label] eq ""} {
+      } elseif {[string trim $raw_param_label] eq ""} {
         set raw_param_label "param$index"
       }
 
@@ -189,7 +188,7 @@ proc render_mock_file {commands out_file} {
       dict set used_arg_names $unique_arg_name 1
 
       set kind [dict get $param kind]
-      set display_name [dict get $param name]
+      set display_name $friendly_param_name
       set bit_length [dict get $param bit_length]
 
       set param_spec [dict create \
