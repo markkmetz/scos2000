@@ -53,6 +53,26 @@ https://github.com/oswald2/AURIS/tree/master/esa-mib/ASCII_CSIM
 
 License there is BSD 3-Clause.
 
+## Generate mock TCL command procs
+
+- Script: `examples/generate_mock_commands.tcl`
+- Default input MIB directory: `mibs/ASCII_CSIM`
+- Default output file: `examples/mock_commands.tcl`
+
+Run:
+
+```bash
+./examples/generate_mock_commands.tcl
+```
+
+Run from the repository root (or use absolute paths).
+
+Custom input/output:
+
+```bash
+./examples/generate_mock_commands.tcl /path/to/mib-dir /path/to/mock_commands.tcl
+```
+
 ## Notes
 
 - README is short on purpose.

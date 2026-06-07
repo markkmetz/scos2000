@@ -1,0 +1,459 @@
+#!/usr/bin/env tclsh
+
+proc read_lines {path} {
+  if {![file exists $path]} {
+    error "Failed to read MIB file: $path does not exist"
+  }
+
+  if {[catch {open $path r} channel]} {
+    error "Failed to open $path for reading: $channel"
+  }
+  set data [read $channel]
+  close $channel
+  return [split $data "\n"]
+}
+
+proc split_dat_line {line} {
+  set cols {}
+  foreach value [split $line "\t"] {
+    lappend cols [string trim $value]
+  }
+  return $cols
+}
+
+proc find_mib_file {mib_dir filename} {
+  set lower [string tolower $filename]
+  set upper [string toupper $filename]
+  foreach candidate [list $filename $lower $upper] {
+    set path [file join $mib_dir $candidate]
+    if {[file exists $path]} {
+      return $path
+    }
+  }
+  error "Unable to locate $filename in $mib_dir. Please verify the file exists and the path is correct."
+}
+
+proc sanitize_identifier {raw fallback} {
+  set name [string trim $raw]
+  if {$name eq ""} {
+    set name $fallback
+  }
+
+  regsub -all {[^A-Za-z0-9_]} $name {_} name
+  regsub -all {_+} $name {_} name
+  set name [string trim $name _]
+
+  if {[regexp {^TC[0-9]} $name]} {
+    regsub {^TC} $name {TC_} name
+  }
+
+  if {$name eq ""} {
+    set name $fallback
+  }
+
+  if {[regexp {^[0-9]} $name]} {
+    set name "tc_$name"
+  }
+
+  return $name
+}
+
+proc is_required_param {param_name kind} {
+  if {[string tolower [string trim $param_name]] eq "filler"} {
+    return 0
+  }
+
+  if {[string toupper [string trim $kind]] eq "A"} {
+    return 0
+  }
+
+  return 1
+}
+
+proc is_variable_length_param {bit_length} {
+  return [expr {[string trim $bit_length] eq "0"}]
+}
+
+proc is_count_param_name {name} {
+  set normalized [string tolower [string trim $name]]
+  if {$normalized eq ""} {
+    return 0
+  }
+  if {[regexp {^number[_ ]of([_ ].*)?$} $normalized]} {
+    return 1
+  }
+  if {[regexp {^no([_ ].*)?$} $normalized]} {
+    return 1
+  }
+  if {[regexp {^n$|^n[_ ]} $normalized]} {
+    return 1
+  }
+  return 0
+}
+
+proc build_cpc_index {mib_dir} {
+  set cpc_path [find_mib_file $mib_dir "cpc.dat"]
+  set cpc_index [dict create]
+
+  foreach line [read_lines $cpc_path] {
+    set trimmed [string trim $line]
+    if {$trimmed eq "" || [string first "#" $trimmed] == 0} {
+      continue
+    }
+
+    set cols [split_dat_line $line]
+    set param_id [lindex $cols 0]
+    set param_name [lindex $cols 1]
+    set cpc_categ [lindex $cols 7]
+
+    if {[string trim $param_id] eq "" || [string trim $param_name] eq ""} {
+      continue
+    }
+
+    dict set cpc_index $param_id [dict create \
+      name $param_name \
+      categ $cpc_categ]
+  }
+
+  return $cpc_index
+}
+
+proc build_command_index {mib_dir} {
+  set ccf_path [find_mib_file $mib_dir "ccf.dat"]
+  set cdf_path [find_mib_file $mib_dir "cdf.dat"]
+  set cpc_index [build_cpc_index $mib_dir]
+  set cdf_param_name_col 2
+  set cdf_bit_length_col 3
+  set cdf_repeat_count_col 6
+  set cdf_repeat_count_col_legacy 5
+  set cdf_param_id_col 7
+  set cdf_param_id_col_legacy 6
+
+  set commands [dict create]
+
+  foreach line [read_lines $ccf_path] {
+    set trimmed [string trim $line]
+    if {$trimmed eq "" || [string first "#" $trimmed] == 0} {
+      continue
+    }
+
+    set cols [split_dat_line $line]
+    set tc_id [lindex $cols 0]
+    if {$tc_id eq ""} {
+      continue
+    }
+
+    set friendly [lindex $cols 1]
+    set description [lindex $cols 2]
+
+    dict set commands $tc_id [dict create \
+      id $tc_id \
+      friendly $friendly \
+      description $description \
+      params {}]
+  }
+
+  foreach line [read_lines $cdf_path] {
+    set trimmed [string trim $line]
+    if {$trimmed eq "" || [string first "#" $trimmed] == 0} {
+      continue
+    }
+
+    set cols [split_dat_line $line]
+    set tc_id [lindex $cols 0]
+    if {$tc_id eq "" || ![dict exists $commands $tc_id]} {
+      continue
+    }
+
+    set param_name [lindex $cols $cdf_param_name_col]
+    set raw_col_6 [string trim [lindex $cols $cdf_repeat_count_col]]
+    set raw_col_5 [string trim [lindex $cols $cdf_repeat_count_col_legacy]]
+    set explicit_repeat_count ""
+    set param_id [string trim [lindex $cols $cdf_param_id_col_legacy]]
+    if {[string is integer -strict $raw_col_6] && $raw_col_6 > 0} {
+      set explicit_repeat_count $raw_col_6
+      set param_id [string trim [lindex $cols $cdf_param_id_col]]
+    }
+    set preferred_name $param_name
+    set matches_param_id_pattern [expr {[regexp {^S2KCP[0-9]+$} [string trim $preferred_name]]}]
+    set should_use_cpc_name [expr {([string trim $preferred_name] eq "" || $matches_param_id_pattern) && [string trim $param_id] ne "" && [dict exists $cpc_index $param_id]}]
+    if {$should_use_cpc_name} {
+      set preferred_name [dict get $cpc_index $param_id name]
+    }
+    set cpc_categ ""
+    if {[string trim $param_id] ne "" && [dict exists $cpc_index $param_id]} {
+      set cpc_categ [dict get $cpc_index $param_id categ]
+    }
+
+    set param [dict create \
+      kind [lindex $cols 1] \
+      name $param_name \
+      preferred_name $preferred_name \
+      payload_name $param_id \
+      bit_length [lindex $cols $cdf_bit_length_col] \
+      group_size $raw_col_5 \
+      explicit_repeat_count $explicit_repeat_count \
+      cpc_categ $cpc_categ \
+      param_id $param_id]
+
+    set entry [dict get $commands $tc_id]
+    set params [dict get $entry params]
+    lappend params $param
+    dict set entry params $params
+    dict set commands $tc_id $entry
+  }
+
+  return $commands
+}
+
+proc render_mock_file {commands out_file} {
+  if {[catch {open $out_file w} channel]} {
+    error "Failed to open $out_file for writing: $channel"
+  }
+
+  puts $channel "# Auto-generated mock telecommand procedures."
+  puts $channel "# Generated by examples/generate_mock_commands.tcl"
+  puts $channel ""
+
+  set used_proc_names [dict create]
+
+  foreach tc_id [lsort [dict keys $commands]] {
+    set entry [dict get $commands $tc_id]
+    set friendly [dict get $entry friendly]
+
+    if {[string trim $friendly] eq ""} {
+      set proc_base [sanitize_identifier $tc_id $tc_id]
+    } else {
+      set proc_base [sanitize_identifier $friendly $tc_id]
+    }
+
+    set proc_name $proc_base
+    if {[dict exists $used_proc_names $proc_name]} {
+      set proc_name "${proc_base}_[sanitize_identifier $tc_id $tc_id]"
+    }
+    set suffix 2
+    while {[dict exists $used_proc_names $proc_name]} {
+      set proc_name "${proc_base}_$suffix"
+      incr suffix
+    }
+    dict set used_proc_names $proc_name 1
+
+    set required_params {}
+    set optional_params {}
+    set variable_params {}
+    set used_arg_names [dict create]
+    set index 1
+
+    foreach param [dict get $entry params] {
+      set friendly_param_name [dict get $param preferred_name]
+      set payload_param_name [dict get $param payload_name]
+      set param_id [dict get $param param_id]
+      set arg_param_label $friendly_param_name
+      if {[string trim $arg_param_label] eq "" && [string trim $param_id] ne ""} {
+        set arg_param_label $param_id
+      } elseif {[string trim $arg_param_label] eq ""} {
+        set arg_param_label "param$index"
+      }
+
+      set payload_label $payload_param_name
+      if {[string trim $payload_label] eq ""} {
+        set payload_label $arg_param_label
+      }
+
+      set arg_name [sanitize_identifier $arg_param_label "param$index"]
+      set unique_arg_name $arg_name
+      set suffix 2
+      while {[dict exists $used_arg_names $unique_arg_name]} {
+        set unique_arg_name "${arg_name}_$suffix"
+        incr suffix
+      }
+      dict set used_arg_names $unique_arg_name 1
+
+      set kind [dict get $param kind]
+      set display_name $friendly_param_name
+      set bit_length [dict get $param bit_length]
+
+      set param_spec [dict create \
+        raw $payload_label \
+        arg $unique_arg_name \
+        display $display_name \
+        kind $kind \
+        group_size [dict get $param group_size] \
+        explicit_repeat_count [dict get $param explicit_repeat_count] \
+        cpc_categ [dict get $param cpc_categ] \
+        bit_length $bit_length]
+
+      if {[is_variable_length_param $bit_length]} {
+        lappend variable_params $param_spec
+      } elseif {[is_required_param $display_name $kind]} {
+        lappend required_params $param_spec
+      } else {
+        lappend optional_params $param_spec
+      }
+
+      incr index
+    }
+
+    set arg_spec {}
+    set auto_count_param_arg ""
+    set auto_count_param_args [dict create]
+    set list_group_param_args [dict create]
+    set count_list_relations {}
+    set single_variable_param {}
+    set required_count [llength $required_params]
+    for {set i 0} {$i < $required_count} {incr i} {
+      set count_param [lindex $required_params $i]
+      set raw_explicit_repeat_count [string trim [dict get $count_param explicit_repeat_count]]
+      if {[string is integer -strict $raw_explicit_repeat_count] && $raw_explicit_repeat_count > 0} {
+        set group_size $raw_explicit_repeat_count
+      } else {
+        set count_display [dict get $count_param display]
+        set count_arg_name [dict get $count_param arg]
+        if {![is_count_param_name $count_display] && ![is_count_param_name $count_arg_name]} {
+          continue
+        }
+
+        set raw_group_size [string trim [dict get $count_param group_size]]
+        set group_size 1
+        if {[string is integer -strict $raw_group_size] && $raw_group_size > 0} {
+          set group_size $raw_group_size
+        }
+      }
+      if {$i + $group_size >= $required_count} {
+        continue
+      }
+
+      set group_params {}
+      for {set j 1} {$j <= $group_size} {incr j} {
+        lappend group_params [lindex $required_params [expr {$i + $j}]]
+      }
+
+      set relation [dict create \
+        count_arg [dict get $count_param arg] \
+        group_params $group_params]
+      lappend count_list_relations $relation
+    }
+
+    foreach relation $count_list_relations {
+      set count_arg [dict get $relation count_arg]
+      dict set auto_count_param_args $count_arg 1
+      foreach param_spec [dict get $relation group_params] {
+        dict set list_group_param_args [dict get $param_spec arg] 1
+      }
+    }
+
+    if {[llength $variable_params] == 1} {
+      set single_variable_param [lindex $variable_params 0]
+      if {[llength $required_params] > 0} {
+        set candidate [lindex $required_params end]
+        set candidate_display [dict get $candidate display]
+        set candidate_arg [dict get $candidate arg]
+        if {[is_count_param_name $candidate_display] || [is_count_param_name $candidate_arg]} {
+          set auto_count_param_arg $candidate_arg
+        }
+      }
+    }
+    if {$auto_count_param_arg ne ""} {
+      dict set auto_count_param_args $auto_count_param_arg 1
+    }
+
+    foreach param_spec $required_params {
+      set arg_name [dict get $param_spec arg]
+      if {[dict exists $auto_count_param_args $arg_name]} {
+        continue
+      }
+      if {[dict exists $list_group_param_args $arg_name]} {
+        lappend arg_spec [list $arg_name {}]
+        continue
+      }
+      lappend arg_spec $arg_name
+    }
+    foreach param_spec $optional_params {
+      lappend arg_spec [list [dict get $param_spec arg] ""]
+    }
+    # Single variable-length parameters use one list argument for Tcl-friendly calls.
+    # Multiple variable-length parameters still use args to preserve existing behavior.
+    if {[llength $variable_params] == 1} {
+      lappend arg_spec [list [dict get $single_variable_param arg] {}]
+    } elseif {[llength $variable_params] > 1} {
+      lappend arg_spec args
+    }
+
+    set arg_spec_text [list {*}$arg_spec]
+    puts $channel "proc $proc_name {$arg_spec_text} {"
+    puts $channel "    # $tc_id: [dict get $entry description]"
+    puts $channel [format {    set payload [list %s]} $tc_id]
+    foreach relation $count_list_relations {
+      set count_arg [dict get $relation count_arg]
+      set group_params [dict get $relation group_params]
+      set first_group_arg [dict get [lindex $group_params 0] arg]
+      puts $channel [format {    set %s [llength $%s]} $count_arg $first_group_arg]
+      foreach param_spec [lrange $group_params 1 end] {
+        set other_group_arg [dict get $param_spec arg]
+        puts $channel [format {    if {[llength $%s] != $%s} { error "%s must have the same item count as %s" }} $other_group_arg $count_arg $other_group_arg $first_group_arg]
+      }
+    }
+    if {$auto_count_param_arg ne ""} {
+      set variable_list_arg [dict get $single_variable_param arg]
+      puts $channel [format {    set %s [llength $%s]} $auto_count_param_arg $variable_list_arg]
+    }
+
+    foreach param_spec $required_params {
+      set raw [dict get $param_spec raw]
+      set arg [dict get $param_spec arg]
+      if {[dict exists $list_group_param_args $arg]} {
+        puts $channel [format {    foreach value $%s { lappend payload [list {%s} $value] }} $arg $raw]
+      } else {
+        puts $channel [format {    lappend payload [list {%s} $%s]} $raw $arg]
+      }
+    }
+
+    foreach param_spec $optional_params {
+      set raw [dict get $param_spec raw]
+      set arg [dict get $param_spec arg]
+      puts $channel [format {    if {$%s ne ""} { lappend payload [list {%s} $%s] }} $arg $raw $arg]
+    }
+
+    if {[llength $variable_params] > 0} {
+      set variable_names {}
+      foreach param_spec $variable_params {
+        lappend variable_names [dict get $param_spec raw]
+      }
+
+      puts $channel "    # Variable-length parameter(s): [join $variable_names ", "]"
+      if {[llength $variable_names] == 1} {
+        set variable_param [lindex $variable_params 0]
+        set variable_arg [dict get $variable_param arg]
+        puts $channel [format {    if {[llength $%s] > 0} { lappend payload [list {%s} $%s] }} $variable_arg [lindex $variable_names 0] $variable_arg]
+      } else {
+        puts $channel "    # Multiple variable-length parameters are encoded as VARARGS:param1,param2,..."
+        set variable_key "VARARGS:[join $variable_names ","]"
+        puts $channel [format {    if {[llength $args] > 0} { lappend payload [list {%s} $args] }} $variable_key]
+      }
+    }
+
+    puts $channel "    return \$payload"
+    puts $channel "}"
+    puts $channel ""
+  }
+
+  close $channel
+}
+
+set script_dir [file dirname [file normalize [info script]]]
+set mib_dir [file join $script_dir .. mibs ASCII_CSIM]
+if {[llength $argv] >= 1} {
+  set mib_dir [lindex $argv 0]
+}
+set mib_dir [file normalize $mib_dir]
+
+set out_file [file join $script_dir mock_commands.tcl]
+if {[llength $argv] >= 2} {
+  set out_file [lindex $argv 1]
+}
+set out_file [file normalize $out_file]
+
+set commands [build_command_index $mib_dir]
+render_mock_file $commands $out_file
+
+puts "Generated [llength [dict keys $commands]] mock procs in $out_file"
